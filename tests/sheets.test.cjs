@@ -34,6 +34,8 @@ const vm = require('node:vm');
   assert.equal(defaultSheetSettings.machine, 'maker');
   assert.equal(defaultSheetSettings.mat, 'm12x12');
   assert.equal(defaultSheetSettings.pageOutline, true);
+  assert.equal(defaultSheetSettings.scissorLine, false, 'scissor line is off by default');
+  assert.ok(Math.abs(exporter.SCISSOR_LINE_MM - 0.1) < 1e-9, 'scissor line is a 0.1 mm hairline');
 
   // Researched Cricut cutting areas (mm) per mat.
   assert.deepEqual(MACHINES.maker, ['m12x12', 'm12x24']);

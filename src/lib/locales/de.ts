@@ -139,6 +139,8 @@ export const de = {
   'export.offsetY': "Schnitt liegt unten (+) / oben (−) vom Druck",
   'export.offsetHelp': "Die Schnitt-SVG verschiebt die Schnittlinien um diesen Wert zurück; Rahmen und Druck bleiben unverändert. Gespeichert für diesen Browser. „Druck und Schnitt als SVG“ für Print Then Cut wird nicht verschoben.",
   'export.alignmentUnavailable': "Der Test braucht ein Papierformat, das auf die gewählte Matte passt.",
+  'export.scissorLine': "Scherenlinie",
+  'export.scissorLineHelp': "Druckt eine ganz dünne Linie (0,1 mm) genau dort, wo geschnitten wird – zum Ausschneiden mit der Schere oder zur Kontrolle. Gilt für PDF, PNG und Browserdruck.",
   'export.title': 'Dateien exportieren',
   'export.print': 'Druckdatei',
   'export.printHelp': 'Drucke mit 100 % / tatsächlicher Größe. „An Seite anpassen“ verändert die Maße.',

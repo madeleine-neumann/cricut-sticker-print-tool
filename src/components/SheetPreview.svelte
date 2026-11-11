@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { drawCalibration, drawScissors, drawSheet, geometryFor } from '../lib/export.ts';
+  import { SCISSOR_LINE_MM, drawCalibration, drawScissorLines, drawScissors, drawSheet, geometryFor } from '../lib/export.ts';
   import { locale, translations } from '../lib/i18n.ts';
   import { formatNotice } from '../lib/sheets.ts';
   import type { WorkspaceState } from '../lib/state.svelte.ts';
@@ -21,6 +21,7 @@
     const page = drawSheet(geo, true, plan.entries);
     drawScissors(page, plan.layout);
     drawCalibration(page, plan.layout);
+    if (model.sheetSettings.scissorLine) drawScissorLines(page, geo, SCISSOR_LINE_MM, plan.layout.pageWMm);
     canvas.width = geo.pageW; canvas.height = geo.pageH;
     canvas.getContext('2d')?.drawImage(page, 0, 0);
   });

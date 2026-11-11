@@ -224,6 +224,20 @@ export function drawScissors(canvas: HTMLCanvasElement, layout: PlanLayout): voi
 }
 
 /** Solid 1 × 1 cm squares with a small label, measured after printing to check scaling. */
+export const SCISSOR_LINE_MM = 0.1;
+
+/** A hairline on every cut contour, printed for cutting by hand or checking the cut. */
+export function drawScissorLines(canvas: HTMLCanvasElement, geo: SheetGeometry, widthMm: number, pageWMm: number): void {
+  const g = canvas.getContext('2d');
+  if (!g) return;
+  g.save();
+  g.strokeStyle = '#2b2b2b';
+  g.lineWidth = Math.max(0.5, widthMm * canvas.width / pageWMm);
+  g.lineJoin = 'round';
+  for (const d of geo.paths) g.stroke(new Path2D(d));
+  g.restore();
+}
+
 export function drawCalibration(canvas: HTMLCanvasElement, layout: PlanLayout): void {
   if (!layout.calibration?.length) return;
   const g = canvas.getContext('2d'), s = canvas.width / layout.pageWMm;
@@ -323,6 +337,7 @@ export async function exportSheet(kind: SheetExportKind, plan: SheetPlan, settin
     const canvas = drawSheet(geo, kind !== 'png', plan.entries);
     drawScissors(canvas, layout);
     drawCalibration(canvas, layout);
+    if (settings.scissorLine) drawScissorLines(canvas, geo, SCISSOR_LINE_MM, layout.pageWMm);
     if (kind === 'print') {
       const png = await canvasPngBlob(canvas, dpi);
       printImage(URL.createObjectURL(png), layout.pageWMm, layout.pageHMm, report);

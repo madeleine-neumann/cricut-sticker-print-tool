@@ -45,13 +45,15 @@ export interface SheetSettings {
    */
   offsetXMm: number;
   offsetYMm: number;
+  /** Print a hairline on the cut contours, e.g. for cutting by hand. */
+  scissorLine: boolean;
   /** Print a 1 × 1 cm square to check print scaling. */
   calibration: boolean;
 }
 
 export const defaultSheetSettings: SheetSettings = {
   paper: 'letter', machine: 'maker', mat: 'm12x12', arrangement: 'nest', rotation: '90', orientation: 'auto',
-  marginMm: 6, gapMm: 1, dpiCap: 300, pageOutline: true, calibration: true, offsetXMm: 0, offsetYMm: 0,
+  marginMm: 6, gapMm: 1, dpiCap: 300, pageOutline: true, scissorLine: false, calibration: true, offsetXMm: 0, offsetYMm: 0,
 };
 
 export interface SheetEntry { motif: Motif; result: StickerResult; want: number }

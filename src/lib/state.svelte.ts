@@ -111,6 +111,11 @@ export class WorkspaceState {
     this.scheduleSheet();
   }
 
+  /** Print-only options do not change the layout, so the sheet is not planned again. */
+  setPrintOption(key: 'scissorLine', value: boolean): void {
+    this.sheetSettings[key] = value;
+  }
+
   /** The measured offset only changes the cut file, so the sheet is not planned again. */
   setOffset(key: 'offsetXMm' | 'offsetYMm', value: number): void {
     this.sheetSettings[key] = Number.isFinite(value) ? Math.max(-15, Math.min(15, value)) : 0;

@@ -141,6 +141,8 @@ export const en = {
   'export.offsetY': "Cut lies below (+) / above (−) the print",
   'export.offsetHelp': "The cut SVG moves its cut lines back by this amount; frame and print stay unchanged. Saved in this browser. The Print Then Cut file “Print and cut SVG” is not moved.",
   'export.alignmentUnavailable': "The test needs a paper size that fits the selected mat.",
+  'export.scissorLine': "Scissor line",
+  'export.scissorLineHelp': "Prints a very thin line (0.1 mm) exactly where the cut goes – for cutting with scissors or as a check. Applies to PDF, PNG and browser print.",
   'export.title': 'Export files',
   'export.print': 'Print file',
   'export.printHelp': 'Print at 100% / actual size. “Fit to page” changes the dimensions.',

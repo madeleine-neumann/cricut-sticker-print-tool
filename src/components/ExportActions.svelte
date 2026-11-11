@@ -28,6 +28,8 @@
           <option value="600">{$translations('sheet.dpiCap.600')}</option>
         </select>
       </label>
+      <label class="check-row"><input id="scissor-line" type="checkbox" aria-describedby="scissor-help" checked={model.sheetSettings.scissorLine} onchange={(event) => model.setPrintOption('scissorLine', event.currentTarget.checked)} />{$translations('export.scissorLine')}</label>
+      <p class="field-help" id="scissor-help">{$translations('export.scissorLineHelp')}</p>
       <div class="export-buttons">
         <button type="button" class="primary-action" data-sheet-export disabled={!ready} onclick={() => model.exportSheet('print')}>{$translations('export.printBrowser')}</button>
         {#if canPdf}<button type="button" data-sheet-export disabled={!ready} onclick={() => model.exportSheet('pdf')}>{$translations('export.printPdf')}</button>{/if}
