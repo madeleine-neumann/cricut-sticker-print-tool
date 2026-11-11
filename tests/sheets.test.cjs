@@ -214,5 +214,33 @@ const vm = require('node:vm');
   assert.ok(Math.abs(+rectTag[3] - 10 / 25.4 * dpi) < 0.01 && Math.abs(+rectTag[4] - 10 / 25.4 * dpi) < 0.01, 'SVG square is 10 mm');
   const sqOff = (await planSheet([entry(rect, 3)], { ...defaultSheetSettings, paper: 'a4', arrangement: 'grid', calibration: false })).plan;
   assert.doesNotMatch(exporter.sheetCutFile(sqOff, { ...defaultSheetSettings, paper: 'a4', calibration: false }, null).svg, /calibration-1cm/);
+
+  // Measured offset: the cut-only SVG moves its cut lines back; frame, check square and Print Then Cut file stay.
+  const offPlan = (await planSheet([entry(rect, 2)], { ...defaultSheetSettings, paper: 'a4', arrangement: 'grid' })).plan;
+  const offDpi = exporter.sheetDpiFor(offPlan, defaultSheetSettings), mmPx = offDpi / 25.4;
+  const firstPoint = (svg) => svg.match(/<path id="cut-1" d="M(-?[\d.]+),(-?[\d.]+)/).slice(1).map(Number);
+  const frameOf = (svg) => svg.match(/<g id="page-outline"[^>]*>\s*<[^>]+>/)[0];
+  const plainCut = exporter.sheetCutFile(offPlan, { ...defaultSheetSettings, paper: 'a4' }, null).svg;
+  const movedCut = exporter.sheetCutFile(offPlan, { ...defaultSheetSettings, paper: 'a4', offsetXMm: 1.5, offsetYMm: -0.5 }, null).svg;
+  const [x0, y0] = firstPoint(plainCut), [x1, y1] = firstPoint(movedCut);
+  assert.ok(Math.abs((x0 - x1) - 1.5 * mmPx) < 1.5 && Math.abs((y0 - y1) + 0.5 * mmPx) < 1.5, 'cut lines move against the measured offset');
+  assert.equal(frameOf(movedCut), frameOf(plainCut), 'frame stays on the paper');
+  const ptcPlain = exporter.sheetCutFile(offPlan, { ...defaultSheetSettings, paper: 'a4' }, 'data:image/png;base64,AA==').svg;
+  const ptcMoved = exporter.sheetCutFile(offPlan, { ...defaultSheetSettings, paper: 'a4', offsetXMm: 1.5 }, 'data:image/png;base64,AA==').svg;
+  assert.deepEqual(firstPoint(ptcMoved), firstPoint(ptcPlain), 'Print Then Cut file is not moved');
+
+  // Alignment test: five pen crosses inside the cutting area, corrected like the cut file.
+  const page = sheets.alignmentPage({ paper: 'a4', machine: 'maker', mat: 'm12x12' });
+  assert.equal(page.marks.length, 5);
+  assert.ok(page.marks.every((m) => m.x > 0 && m.x < page.limWMm && m.y > 0 && m.y < page.limHMm), 'marks lie inside the cutting area');
+  assert.equal(sheets.alignmentPage({ paper: 'a4', machine: 'joy', mat: 'j45x65' }), null, 'no test when the paper does not fit the mat');
+  const test0 = exporter.alignmentTestSvg({ ...defaultSheetSettings, paper: 'a4' });
+  assert.match(test0.svg, /width="8\.2677in" height="11\.6929in"/);
+  assert.match(test0.svg, /<g id="page-outline"/);
+  const crossAt = (svg) => svg.match(/<g id="alignment-crosses"[^>]*>\s*<path d="M(-?[\d.]+),(-?[\d.]+)H/).slice(1).map(Number);
+  const [tx, ty] = crossAt(test0.svg), tmm = 300 / 25.4;
+  assert.ok(Math.abs(tx - (15 - 8) * tmm) < 0.05 && Math.abs(ty - 15 * tmm) < 0.05, 'first cross is centred on the first mark');
+  const [cx2, cy2] = crossAt(exporter.alignmentTestSvg({ ...defaultSheetSettings, paper: 'a4', offsetXMm: 1, offsetYMm: 2 }).svg);
+  assert.ok(Math.abs(tx - cx2 - tmm) < 0.05 && Math.abs(ty - cy2 - 2 * tmm) < 0.05, 'test crosses use the current correction');
   console.log('Sheet formats, grid, nesting, rotation, multi-motif, no-fit, mat tiling and export files OK');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

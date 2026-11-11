@@ -1,21 +1,24 @@
 import { get } from 'svelte/store';
-import { exportSheet, exportSticker, type SheetExportKind, type StickerExportKind } from './export.ts';
-import { locale } from './i18n.ts';
+import { exportAlignmentTest, exportSheet, exportSticker, type SheetExportKind, type StickerExportKind } from './export.ts';
+import { locale, t } from './i18n.ts';
 import { MACHINES, defaultSheetSettings, planSheet, type MachineKey, type MatKey, type Notice, type PlanOutcome, type SheetSettings } from './sheets.ts';
 
 const machineStorageKey = 'stickerwerkstatt.machine';
 
 /** The machine and mat rarely change, so they are remembered in this browser. */
-function rememberedMachine(): Pick<SheetSettings, 'machine' | 'mat'> {
+function rememberedMachine(): Pick<SheetSettings, 'machine' | 'mat' | 'offsetXMm' | 'offsetYMm'> {
   try {
     const saved = JSON.parse(globalThis.localStorage?.getItem(machineStorageKey) ?? 'null');
-    if (saved && saved.machine in MACHINES && (MACHINES[saved.machine as MachineKey] as (MatKey | null)[]).concat(saved.machine === 'none' ? [null] : []).includes(saved.mat)) return saved;
+    if (saved && saved.machine in MACHINES && (MACHINES[saved.machine as MachineKey] as (MatKey | null)[]).concat(saved.machine === 'none' ? [null] : []).includes(saved.mat)) {
+      const offset = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+      return { machine: saved.machine, mat: saved.mat, offsetXMm: offset(saved.offsetXMm), offsetYMm: offset(saved.offsetYMm) };
+    }
   } catch { /* Storage can be disabled or hold old data. */ }
-  return { machine: defaultSheetSettings.machine, mat: defaultSheetSettings.mat };
+  return { machine: defaultSheetSettings.machine, mat: defaultSheetSettings.mat, offsetXMm: 0, offsetYMm: 0 };
 }
 
 function rememberMachine(settings: SheetSettings): void {
-  try { globalThis.localStorage?.setItem(machineStorageKey, JSON.stringify({ machine: settings.machine, mat: settings.mat })); } catch { /* Keep it for this page only. */ }
+  try { globalThis.localStorage?.setItem(machineStorageKey, JSON.stringify({ machine: settings.machine, mat: settings.mat, offsetXMm: settings.offsetXMm, offsetYMm: settings.offsetYMm })); } catch { /* Keep it for this page only. */ }
 }
 import { computeSticker, createCollection, loadMotifFiles, type Collection, type CutSettings, type LoadError, type Motif, type StickerResult } from './stickers.ts';
 
@@ -94,6 +97,17 @@ export class WorkspaceState {
     this.sheetSettings[key] = value;
     if (key === 'machine' || key === 'mat') rememberMachine(this.sheetSettings);
     this.scheduleSheet();
+  }
+
+  /** The measured offset only changes the cut file, so the sheet is not planned again. */
+  setOffset(key: 'offsetXMm' | 'offsetYMm', value: number): void {
+    this.sheetSettings[key] = Number.isFinite(value) ? Math.max(-15, Math.min(15, value)) : 0;
+    rememberMachine(this.sheetSettings);
+  }
+
+  async exportAlignment(kind: 'pdf' | 'svg'): Promise<void> {
+    this.exportNotices = [];
+    await exportAlignmentTest(kind, $state.snapshot(this.sheetSettings) as SheetSettings, t('export.alignmentTitle'), (notice) => { this.exportNotices = [...this.exportNotices, notice]; });
   }
 
   setMachine(machine: MachineKey): void {

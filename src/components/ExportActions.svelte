@@ -1,7 +1,7 @@
 <script lang="ts">
   import { pdfSupported } from '../lib/export.ts';
   import { locale, translations } from '../lib/i18n.ts';
-  import { formatNotice } from '../lib/sheets.ts';
+  import { alignmentPage, formatNotice } from '../lib/sheets.ts';
   import type { WorkspaceState } from '../lib/state.svelte.ts';
 
   let { state: model }: { state: WorkspaceState } = $props();
@@ -36,6 +36,30 @@
       <button type="button" disabled={!ready} onclick={() => model.exportSheet('both')}>{$translations('export.combinedSvg')}</button>
     </div>
   </div>
+
+  <details class="export-group single-export alignment">
+    <summary>{$translations('export.alignment')}</summary>
+    {#if alignmentPage(model.sheetSettings)}
+      <ol class="alignment-steps">
+        <li>{$translations('export.alignmentStep1')}</li>
+        <li>{$translations('export.alignmentStep2')}</li>
+        <li>{$translations('export.alignmentStep3')}</li>
+      </ol>
+      <div class="export-buttons">
+        <button type="button" onclick={() => model.exportAlignment('pdf')}>{$translations('export.alignmentPdf')}</button>
+        <button type="button" onclick={() => model.exportAlignment('svg')}>{$translations('export.alignmentSvg')}</button>
+      </div>
+      <label class="field-row" for="offset-x"><span>{$translations('export.offsetX')}</span>
+        <span class="number-with-unit"><input id="offset-x" type="number" min="-15" max="15" step="0.1" inputmode="decimal" value={model.sheetSettings.offsetXMm} onchange={(event) => model.setOffset('offsetXMm', Number(event.currentTarget.value))} /><span>mm</span></span>
+      </label>
+      <label class="field-row" for="offset-y"><span>{$translations('export.offsetY')}</span>
+        <span class="number-with-unit"><input id="offset-y" type="number" min="-15" max="15" step="0.1" inputmode="decimal" value={model.sheetSettings.offsetYMm} onchange={(event) => model.setOffset('offsetYMm', Number(event.currentTarget.value))} /><span>mm</span></span>
+      </label>
+      <p class="field-help">{$translations('export.offsetHelp')}</p>
+    {:else}
+      <p class="field-help">{$translations('export.alignmentUnavailable')}</p>
+    {/if}
+  </details>
 
   <details class="export-group single-export">
     <summary>{$translations('export.single')}{model.selected ? `: ${model.selected.name}` : ''}</summary>

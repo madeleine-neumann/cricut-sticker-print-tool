@@ -1,5 +1,5 @@
 import { cutSvg, pdfFromRgba, pngSetDpi, sheetGeometryMulti, sheetSvg, type SheetGeometry } from './engine/index.js';
-import { type Notice, type PlanLayout, type SheetEntry, type SheetPlan, type SheetSettings } from './sheets.ts';
+import { alignmentPage, type AlignmentPage, type Notice, type PlanLayout, type SheetEntry, type SheetPlan, type SheetSettings } from './sheets.ts';
 import type { Motif, StickerResult } from './stickers.ts';
 
 export type SheetExportKind = 'print' | 'pdf' | 'png' | 'svg' | 'both';
@@ -25,8 +25,13 @@ export interface CutLayout { layout: PlanLayout; dpi: number; geo: SheetGeometry
  * The SVG describes one mat sheet (one Cricut job) on exactly the same page and coordinates as the print file.
  * When the paper is larger than the mat's cutting area, `matArea` holds that area in sheet pixels.
  */
-export function cutLayout(plan: SheetPlan, settings: SheetSettings): CutLayout {
-  const layout = plan.matLayout ?? plan.layout, dpi = sheetDpiFor(plan, settings), geo = geometryFor(plan, layout, dpi);
+export function cutLayout(plan: SheetPlan, settings: SheetSettings, applyOffset = false): CutLayout {
+  const layout = plan.matLayout ?? plan.layout, dpi = sheetDpiFor(plan, settings);
+  // A measured offset moves only the cut lines; frame and check square stay on the paper.
+  const shifted = applyOffset && (settings.offsetXMm || settings.offsetYMm)
+    ? { ...layout, placements: layout.placements.map((p) => ({ ...p, cxMm: p.cxMm - settings.offsetXMm, cyMm: p.cyMm - settings.offsetYMm })) }
+    : layout;
+  const geo = geometryFor(plan, shifted, dpi);
   // The layout carries the mat's cutting area, measured from the paper's top-left corner.
   if (layout.limWMm >= layout.pageWMm - 0.05 && layout.limHMm >= layout.pageHMm - 0.05) return { layout, dpi, geo, matArea: null, overflow: false };
   const matArea = { w: Math.min(geo.pageW, (layout.limWMm / 25.4) * dpi), h: Math.min(geo.pageH, (layout.limHMm / 25.4) * dpi) };
@@ -51,7 +56,8 @@ export function openFrame(pageW: number, pageH: number, area: { w: number; h: nu
 }
 
 export function sheetCutFile(plan: SheetPlan, settings: SheetSettings, imageHref: string | null) {
-  const cut = cutLayout(plan, settings);
+  // Print and Cut files register on printed marks in Design Space, so only the cut-only file is corrected.
+  const cut = cutLayout(plan, settings, !imageHref);
   let svg = sheetSvg(cut.geo, cut.dpi, imageHref, { outline: settings.pageOutline && !cut.matArea });
   if (settings.pageOutline && cut.matArea) svg = svg.replace('  <g id="cut"', `${openFrame(cut.geo.pageW, cut.geo.pageH, cut.matArea)}  <g id="cut"`);
   svg = withCalibrationLayer(svg, cut.layout, cut.dpi);
@@ -69,6 +75,75 @@ export function withCalibrationLayer(svg: string, layout: PlanLayout, dpi: numbe
   const px = (mm: number) => +(mm / 25.4 * dpi).toFixed(3);
   const rects = layout.calibration.map((sq) => `    <rect x="${px(sq.x)}" y="${px(sq.y)}" width="${px(sq.size)}" height="${px(sq.size)}"/>\n`).join('');
   return svg.replace('  <g id="cut"', `  <g id="calibration-1cm" fill="#000000" stroke="none">\n${rects}  </g>\n  <g id="cut"`);
+}
+
+const TEST_DPI = 300;
+
+/** Pen crosses on the measuring marks of the alignment test, corrected by the current offset like the cut file. */
+export function alignmentTestSvg(settings: SheetSettings): { svg: string; filename: string } | null {
+  const page = alignmentPage(settings);
+  if (!page) return null;
+  const px = (mm: number) => +(mm / 25.4 * TEST_DPI).toFixed(2), W = px(page.pageWMm), H = px(page.pageHMm);
+  const area = { w: px(page.limWMm), h: px(page.limHMm) };
+  const frame = settings.pageOutline
+    ? (area.w < W - 0.5 || area.h < H - 0.5 ? openFrame(W, H, area) : `  <g id="page-outline" fill="none" stroke="#000000" stroke-width="1">\n    <rect x="0" y="0" width="${W}" height="${H}"/>\n  </g>\n`)
+    : '';
+  const arm = 8, crosses = page.marks.map(({ x, y }) => {
+    const cx = x - settings.offsetXMm, cy = y - settings.offsetYMm;
+    return `    <path d="M${px(cx - arm)},${px(cy)}H${px(cx + arm)}M${px(cx)},${px(cy - arm)}V${px(cy + arm)}"/>\n`;
+  }).join('');
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${(page.pageWMm / 25.4).toFixed(4)}in" height="${(page.pageHMm / 25.4).toFixed(4)}in" viewBox="0 0 ${W} ${H}">\n${frame}  <g id="alignment-crosses" fill="none" stroke="#000000" stroke-width="1">\n${crosses}  </g>\n</svg>\n`;
+  return { svg, filename: `alignment-test-${settings.paper}_draw.svg` };
+}
+
+/** Printed measuring scales (0.5 mm steps, ±4 mm) next to each mark, plus the 1 cm check square. */
+function alignmentTestCanvas(page: AlignmentPage, title: string): HTMLCanvasElement {
+  const s = TEST_DPI / 25.4, canvas = document.createElement('canvas');
+  canvas.width = Math.round(page.pageWMm * s); canvas.height = Math.round(page.pageHMm * s);
+  const g = canvas.getContext('2d');
+  if (!g) throw new Error('Canvas unavailable');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, canvas.width, canvas.height);
+  g.strokeStyle = '#000000'; g.fillStyle = '#000000'; g.lineWidth = 0.18 * s;
+  g.font = `${1.5 * s}px system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  // The pen's vertical line crosses the X scale 5 mm below the mark, its horizontal line the Y scale 5 mm to the right.
+  const tickLen = (t: number) => (t === 0 ? 2.6 : t % 2 === 0 ? 1.6 : 0.9);
+  for (const { x, y } of page.marks) {
+    g.beginPath(); g.arc(x * s, y * s, 1 * s, 0, Math.PI * 2); g.stroke();
+    g.beginPath(); g.moveTo((x - 4.5) * s, (y + 5) * s); g.lineTo((x + 4.5) * s, (y + 5) * s); g.stroke();
+    g.beginPath(); g.moveTo((x + 5) * s, (y - 4.5) * s); g.lineTo((x + 5) * s, (y + 4.5) * s); g.stroke();
+    for (let t = -8; t <= 8; t++) {
+      const v = t / 2, len = tickLen(t);
+      g.beginPath(); g.moveTo((x + v) * s, (y + 5) * s); g.lineTo((x + v) * s, (y + 5 - len) * s); g.stroke();
+      g.beginPath(); g.moveTo((x + 5) * s, (y + v) * s); g.lineTo((x + 5 - len) * s, (y + v) * s); g.stroke();
+      if (t % 4 === 0) {
+        const label = v === 0 ? '0' : `${v > 0 ? '+' : '−'}${Math.abs(v)}`;
+        g.textAlign = 'center'; g.fillText(label, (x + v) * s, (y + 6.5) * s);
+        g.textAlign = 'left'; g.fillText(label, (x + 5.8) * s, (y + v) * s);
+      }
+    }
+  }
+  g.textAlign = 'left'; g.font = `600 ${3 * s}px system-ui, sans-serif`;
+  g.fillText(title, 25 * s, 32 * s);
+  g.fillRect(25 * s, 40 * s, 10 * s, 10 * s);
+  return canvas;
+}
+
+export async function exportAlignmentTest(kind: 'pdf' | 'svg', settings: SheetSettings, title: string, report: (notice: Notice) => void): Promise<void> {
+  try {
+    const page = alignmentPage(settings);
+    if (!page) return;
+    if (kind === 'svg') {
+      const file = alignmentTestSvg(settings);
+      if (file) report(download(file.filename, new Blob([file.svg], { type: 'image/svg+xml' })));
+      return;
+    }
+    const canvas = alignmentTestCanvas(page, title), data = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height);
+    if (!data) throw new Error('Canvas unavailable');
+    const pdf = await pdfFromRgba(data.data, canvas.width, canvas.height, (page.pageWMm / 25.4) * 72, (page.pageHMm / 25.4) * 72);
+    report(download(`alignment-test-${settings.paper}_print.pdf`, new Blob([pdf as Uint8Array<ArrayBuffer>], { type: 'application/pdf' })));
+  } catch (error) {
+    report({ key: 'error.exportFailed', params: { reason: reason(error) } });
+  }
 }
 
 export const sheetPdf = (rgba: Uint8ClampedArray, width: number, height: number, layout: PlanLayout) =>

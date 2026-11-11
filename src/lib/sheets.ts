@@ -39,13 +39,19 @@ export interface SheetSettings {
   gapMm: number;
   dpiCap: 300 | 600;
   pageOutline: boolean;
+  /**
+   * Measured offset of the cut against the print (right and down positive), e.g. from a printer that places its
+   * image slightly off the paper edge. The cut-only SVG moves its cut lines back by this amount.
+   */
+  offsetXMm: number;
+  offsetYMm: number;
   /** Print a 1 × 1 cm square to check print scaling. */
   calibration: boolean;
 }
 
 export const defaultSheetSettings: SheetSettings = {
   paper: 'letter', machine: 'maker', mat: 'm12x12', arrangement: 'nest', rotation: '90', orientation: 'auto',
-  marginMm: 6, gapMm: 1, dpiCap: 300, pageOutline: true, calibration: true,
+  marginMm: 6, gapMm: 1, dpiCap: 300, pageOutline: true, calibration: true, offsetXMm: 0, offsetYMm: 0,
 };
 
 export interface SheetEntry { motif: Motif; result: StickerResult; want: number }
@@ -99,6 +105,19 @@ export function matInfo(settings: Pick<SheetSettings, 'paper' | 'machine' | 'mat
   if (!mat) return { mat: null, fitsOnMat: true, limitedByMat: false };
   const fitsOnMat = (paper.w <= mat.w + 0.01 && paper.h <= mat.h + 0.01) || (paper.h <= mat.w + 0.01 && paper.w <= mat.h + 0.01);
   return { mat, fitsOnMat, limitedByMat: fitsOnMat && (paper.w > mat.cutW + 0.01 || paper.h > mat.cutH + 0.01) };
+}
+
+export interface AlignmentPage { pageWMm: number; pageHMm: number; limWMm: number; limHMm: number; marks: Array<{ x: number; y: number }> }
+
+/** Upright page with five measuring marks inside the cutting area; null when the paper does not fit the mat. */
+export function alignmentPage(settings: Pick<SheetSettings, 'paper' | 'machine' | 'mat'>): AlignmentPage | null {
+  const paper = PAPER[settings.paper], info = matInfo(settings);
+  if (!info.fitsOnMat || (info.mat && (paper.w > info.mat.w + 0.01 || paper.h > info.mat.h + 0.01))) return null;
+  const limWMm = Math.min(paper.w, info.mat?.cutW ?? paper.w), limHMm = Math.min(paper.h, info.mat?.cutH ?? paper.h);
+  // Whole millimetres, so the printed scales sit on clean pixel rows.
+  const inset = 15, xs = [inset, Math.floor(limWMm - inset)], ys = [inset, Math.floor(limHMm - inset)];
+  const marks = [...ys.flatMap((y) => xs.map((x) => ({ x, y }))), { x: Math.round(limWMm / 2), y: Math.round(limHMm / 2) }];
+  return { pageWMm: paper.w, pageHMm: paper.h, limWMm, limHMm, marks };
 }
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
