@@ -74,10 +74,4 @@
   </label>
   <label class="check-row"><input type="checkbox" aria-describedby="calibration-help" checked={settings.calibration} onchange={(event) => model.setSheetSetting('calibration', event.currentTarget.checked)} />{$translations('sheet.calibration')}</label>
   <p class="field-help" id="calibration-help">{$translations('sheet.calibrationHelp')}</p>
-  <label class="field-stack" for="dpi-cap"><span>{$translations('sheet.dpiCap')}</span>
-    <select id="dpi-cap" value={String(settings.dpiCap)} onchange={(event) => model.setSheetSetting('dpiCap', Number(event.currentTarget.value) as 300 | 600)}>
-      <option value="300">{$translations('sheet.dpiCap.300')}</option>
-      <option value="600">{$translations('sheet.dpiCap.600')}</option>
-    </select>
-  </label>
 </section>

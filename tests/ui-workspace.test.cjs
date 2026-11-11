@@ -72,7 +72,7 @@ const { JSDOM } = require('jsdom');
   assert.ok(document.querySelector('#border-width-2'), 'settings can be copied to all motifs');
   assert.equal(document.querySelector('#bleed-2').value, '2');
   const sheetStep = [...document.querySelectorAll('.steps button')][2];
-  const exportButtons = () => [...document.querySelectorAll('.export-group:not(.single-export) .export-buttons button')];
+  const exportButtons = () => [...document.querySelectorAll('[data-sheet-export]')];
   sheetStep.click(); await flush();
   assert.ok(exportButtons().every((button) => button.disabled), 'exports wait for the sheet');
   for (let i = 0; i < 40 && !document.querySelector('.sheet-summary'); i++) await new Promise((resolve) => setTimeout(resolve, 10));

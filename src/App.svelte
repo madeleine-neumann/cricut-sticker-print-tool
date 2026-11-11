@@ -58,9 +58,10 @@
         <div class="empty-workspace"><MotifList state={workspace} /></div>
       {:else if activeStep === 2}
         <div class="workspace-grid">
-          <div class="control-column"><SheetControls state={workspace} /><ExportActions state={workspace} /></div>
+          <SheetControls state={workspace} />
           <SheetPreview state={workspace} />
         </div>
+        <ExportActions state={workspace} />
       {:else}
         <div class="workspace-grid">
           {#if activeStep === 0}<MotifList state={workspace} />{:else}<CutMotifs state={workspace} />{/if}
