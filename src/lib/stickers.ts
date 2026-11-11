@@ -25,6 +25,8 @@ export interface CutSettings {
   bleedMm: number;
   insetMm: number;
   mergeMm: number;
+  /** Minimum bend radius of the cut line, so the blade does not tear fine details. */
+  contourMm: number;
   borderMode: 'none' | 'paper' | 'color';
   borderMm: number;
   borderColor: string;
@@ -36,7 +38,7 @@ export interface CutSettings {
 }
 
 export const defaultCutSettings: CutSettings = {
-  bleedMm: 2, insetMm: 0.2, mergeMm: 0, borderMode: 'none', borderMm: 2,
+  bleedMm: 2, insetMm: 0.2, mergeMm: 0, contourMm: 1, borderMode: 'none', borderMm: 2,
   borderColor: '#ffffff', smooth: 2, fillHoles: true, bleedIntoHoles: false,
   alphaThreshold: 128, erodePx: 1,
 };
@@ -175,7 +177,7 @@ export function computeSticker(motif: Motif, settings: CutSettings): StickerResu
   const dpi = bbox.h / (Math.max(0.5, motif.heightMm) / 25.4);
   const px = (mm: number) => mm / 25.4 * dpi;
   const res = computeBleed(motif.rgba, motif.width, motif.height, {
-    bleedPx: px(settings.bleedMm), insetPx: px(settings.insetMm), mergePx: px(settings.mergeMm),
+    bleedPx: px(settings.bleedMm), insetPx: px(settings.insetMm), mergePx: px(settings.mergeMm), roundPx: px(settings.contourMm),
     borderMode: settings.borderMode, borderPx: px(settings.borderMm), borderColor: settings.borderColor,
     smooth: settings.smooth, fillHoles: settings.fillHoles, bleedIntoHoles: settings.bleedIntoHoles,
     whiteBg: false, alphaThreshold: settings.alphaThreshold, erodePx: settings.erodePx,

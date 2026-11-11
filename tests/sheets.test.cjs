@@ -23,7 +23,8 @@ const vm = require('node:vm');
   }
   const rect = motif(1, 'rect', 'rect');
   const tri = motif(2, 'tri', 'triangle', 40);
-  const entry = (m, want = 0) => ({ motif: m, result: computeSticker(m, defaultCutSettings), want });
+  const layoutCut = { ...defaultCutSettings, contourMm: 0 }; // layout parity uses the unrounded cut line
+  const entry = (m, want = 0) => ({ motif: m, result: computeSticker(m, layoutCut), want });
 
   assert.equal(defaultSheetSettings.marginMm, 6);
   assert.equal(defaultSheetSettings.gapMm, 1);

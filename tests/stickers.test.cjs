@@ -61,7 +61,7 @@ const vm = require('node:vm');
 
   const motif = collection.items[0];
   motif.heightMm = 50;
-  const settings = { ...defaultCutSettings, bleedMm: 2, borderMode: 'color', borderMm: 1, borderColor: '#3366cc' };
+  const settings = { ...defaultCutSettings, contourMm: 0, bleedMm: 2, borderMode: 'color', borderMm: 1, borderColor: '#3366cc' };
   const adapted = computeSticker(motif, settings);
   const bbox = legacy.alphaBBox(art, 15, 15, 128);
   const dpi = bbox.h / (motif.heightMm / 25.4);

@@ -16,6 +16,13 @@
   <input class="range-input" type="range" min="0" max="10" step="0.1" aria-label={$translations('cut.bleed')} value={motif.cut.bleedMm} oninput={(event) => set('bleedMm', Number(event.currentTarget.value))} />
   <p class="field-help">{$translations('cut.bleedHelp')}</p>
 
+  <label class="field-row" for={`contour-${motif.id}`}>
+    <span>{$translations('cut.contour')}</span>
+    <span class="number-with-unit"><input id={`contour-${motif.id}`} type="number" min="0" max="5" step="0.1" inputmode="decimal" aria-describedby={`contour-help-${motif.id}`} value={motif.cut.contourMm} onchange={(event) => set('contourMm', Math.min(5, Math.max(0, finite(event.currentTarget.value, 0))))} /><span>mm</span></span>
+  </label>
+  <input class="range-input" type="range" min="0" max="5" step="0.1" aria-label={$translations('cut.contour')} value={motif.cut.contourMm} onchange={(event) => set('contourMm', Number(event.currentTarget.value))} />
+  <p class="field-help" id={`contour-help-${motif.id}`}>{$translations('cut.contourHelp')}</p>
+
   <label class="field-row" for={`border-mode-${motif.id}`}><span>{$translations('cut.border')}</span>
     <select id={`border-mode-${motif.id}`} value={motif.cut.borderMode} onchange={(event) => set('borderMode', event.currentTarget.value as 'none' | 'paper' | 'color')}>
       <option value="none">{$translations('cut.border.none')}</option>

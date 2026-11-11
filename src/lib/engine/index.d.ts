@@ -14,6 +14,8 @@ export interface BleedOptions {
   alphaThreshold: number;
   insetPx?: number;
   mergePx?: number;
+  /** Minimum bend radius of the cut line in pixels; 0 keeps the cut line on the artwork edge. */
+  roundPx?: number;
   borderPx?: number;
   borderMode?: string;
   borderColor?: string;

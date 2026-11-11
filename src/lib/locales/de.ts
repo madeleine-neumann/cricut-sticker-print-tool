@@ -43,6 +43,8 @@ export const de = {
   'cut.printSize': 'Druckfläche',
   'cut.paths': 'Schnittpfade',
   'cut.lowResolution': 'Die Auflösung ist niedrig. Verwende ein größeres Bild oder eine kleinere Motivhöhe.',
+  'cut.contour': "Konturglättung",
+  'cut.contourHelp': "Rundet die Schnittlinie ab, damit das Messer feine Spitzen und schmale Lücken nicht zerreißt. Größer = glattere Linie mit etwas mehr Rand um das Motiv; 0 folgt dem Motivrand genau.",
   'cut.border': 'Außenrand',
   'cut.border.none': 'Kein Rand',
   'cut.border.paper': 'Unbedrucktes Papier',

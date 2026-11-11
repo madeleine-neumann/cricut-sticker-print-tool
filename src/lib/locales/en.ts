@@ -45,6 +45,8 @@ export const en = {
   'cut.printSize': 'Print area',
   'cut.paths': 'Cut paths',
   'cut.lowResolution': 'The resolution is low. Use a larger image or reduce the artwork height.',
+  'cut.contour': "Contour smoothing",
+  'cut.contourHelp': "Rounds the cut line so the blade does not tear fine spikes and narrow gaps. Larger = smoother line with a little more margin around the artwork; 0 follows the artwork edge exactly.",
   'cut.border': 'Outer border',
   'cut.border.none': 'No border',
   'cut.border.paper': 'Unprinted paper',

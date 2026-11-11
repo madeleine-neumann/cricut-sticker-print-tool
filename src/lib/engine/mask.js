@@ -131,8 +131,9 @@
     const bleed = Math.max(0, opts.bleedPx);
     const inset = Math.max(0, opts.insetPx || 0);
     const merge = Math.max(0, opts.mergePx || 0);
+    const round = Math.max(0, opts.roundPx || 0);
     const border = opts.borderMode === "paper" || opts.borderMode === "color" ? Math.max(0, opts.borderPx || 0) : 0;
-    const pad = Math.ceil(Math.max(bleed + border, merge)) + 2;
+    const pad = Math.ceil(Math.max(bleed + border + 2 * round, merge)) + 2;
     const W = w0 + 2 * pad, H = h0 + 2 * pad;
     if (W * H > (opts.maxPixels || 40e6)) throw new Error("Bild, Rand und Beschnitt benötigen mehr als " + Math.round((opts.maxPixels || 40e6) / 1e6) + " Megapixel. Verkleinere das Bild oder reduziere Rand und Beschnitt.");
 
@@ -183,6 +184,20 @@
       const expanded = new Uint8Array(W * H);
       for (let i = 0; i < expanded.length; i++) expanded[i] = distance[i] <= border * border ? 1 : 0;
       cut = expanded;
+    }
+
+    /* Round the cut line so a blade can follow it: grow by 2r, then shrink by r. Every bend of the result has a
+       radius of at least r, outward (thin spikes) and inward (narrow gaps), and the artwork is never cut into. */
+    if (round > 0) {
+      const toCut = edt(cut, W, H, false).d2, grow2 = 4 * round * round, r2 = round * round;
+      const grown = new Uint8Array(W * H);
+      for (let i = 0; i < grown.length; i++) grown[i] = toCut[i] <= grow2 ? 1 : 0;
+      const outside = new Uint8Array(W * H);
+      for (let i = 0; i < outside.length; i++) outside[i] = grown[i] ? 0 : 1;
+      const toOutside = edt(outside, W, H, false).d2;
+      const rounded = new Uint8Array(W * H);
+      for (let i = 0; i < rounded.length; i++) rounded[i] = cut[i] || (grown[i] && toOutside[i] > r2) ? 1 : 0;
+      cut = rounded;
     }
 
     const dOut = edt(cut, W, H, false).d2;
