@@ -38,6 +38,15 @@ const assert = require('node:assert/strict');
   const inside = smooth.cut.reduce((n, v, i) => n + (v && smooth.rgba[i * 4 + 3] === 0 ? 1 : 0), 0);
   assert.equal(inside, 0, 'everything inside the cut line prints');
   assert.ok(smooth.loops === undefined);
+  // A ring with a narrow opening: rounding closes the opening and would leave a new inner hole.
+  const ring = new Uint8ClampedArray(W * H * 4);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const d = Math.hypot(x - 60, y - 60);
+    if (d >= 20 && d <= 30 && !(x > 60 && Math.abs(y - 60) <= 1)) ring.set([200, 40, 90, 255], (y * W + x) * 4);
+  }
+  const loopsFor = (fillHoles) => { const r = engine.computeBleed(ring, W, H, { ...base, fillHoles, roundPx: 4 }); return engine.cutPath(r.cut, r.width, r.height, {}).length; };
+  assert.equal(loopsFor(true), 1, 'holes closed by rounding are filled when inner holes are filled');
+  assert.equal(loopsFor(false), 2, 'without hole filling the inner cut stays');
   assert.equal(defaultCutSettings.contourMm, 1, 'contour smoothing is on by default');
   console.log('Contour smoothing: keeps artwork, rounds spikes and gaps, radius 0 unchanged OK');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

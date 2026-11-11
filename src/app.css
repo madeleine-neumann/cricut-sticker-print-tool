@@ -204,3 +204,11 @@ img.mirrored { transform: scaleX(-1); }
 .motif-actions button[aria-pressed="true"] { border-color: #2455c7; background: #e6edff; color: #1d43a0; }
 .motif-actions button:focus-visible { outline: 3px solid #265bbf; outline-offset: 2px; }
 .motif-actions svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.cut-overlay.editable .cut-line { pointer-events: stroke; cursor: pointer; outline: none; }
+.cut-overlay .cut-line .hit { stroke: transparent; stroke-width: 14; stroke-dasharray: none; }
+.cut-overlay .cut-line:hover path:not(.hit), .cut-overlay .cut-line:focus-visible path:not(.hit) { stroke: #c2410c; stroke-width: 3; }
+.cut-overlay .cut-line.removed path:not(.hit) { stroke: #dc2626; stroke-width: 1.5; stroke-dasharray: 3 4; opacity: .8; }
+.cut-overlay .cut-line:focus-visible .hit { stroke: #2455c733; }
+.cut-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 14px; }
+.cut-edit .field-help { flex: 1 1 260px; margin: 0; }
+.cut-edit .apply-all { margin-top: 0; }

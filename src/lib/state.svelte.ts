@@ -20,7 +20,7 @@ function rememberedMachine(): Pick<SheetSettings, 'machine' | 'mat' | 'offsetXMm
 function rememberMachine(settings: SheetSettings): void {
   try { globalThis.localStorage?.setItem(machineStorageKey, JSON.stringify({ machine: settings.machine, mat: settings.mat, offsetXMm: settings.offsetXMm, offsetYMm: settings.offsetYMm })); } catch { /* Keep it for this page only. */ }
 }
-import { computeSticker, createCollection, duplicateMotif, loadMotifFiles, mirrorMotif, type Collection, type CutSettings, type LoadError, type Motif, type StickerResult } from './stickers.ts';
+import { computeSticker, createCollection, duplicateMotif, loadMotifFiles, mirrorMotif, removeCut, restoreCut, type Collection, type CutSettings, type LoadError, type Motif, type StickerResult } from './stickers.ts';
 
 export class WorkspaceState {
   collection = $state<Collection>(createCollection());
@@ -59,6 +59,22 @@ export class WorkspaceState {
   remove(id: number): void {
     this.collection.remove(id);
     this.errors = [];
+    this.schedule(0);
+  }
+
+  /** Remove or bring back one cut line of the selected motif. */
+  toggleCut(loopIndex: number, removed: boolean): void {
+    const motif = this.selected, result = this.result;
+    if (!motif || !result) return;
+    const loop = removed ? result.removedLoops[loopIndex] : result.loops[loopIndex];
+    if (!loop) return;
+    if (removed) restoreCut(motif, result, loop); else removeCut(motif, result, loop);
+    this.schedule(0);
+  }
+
+  restoreAllCuts(): void {
+    if (!this.selected) return;
+    this.selected.removedCuts = [];
     this.schedule(0);
   }
 

@@ -19,6 +19,8 @@ export interface Motif {
   thumbnail: string;
   /** Flipped left to right; the pixels in `rgba` are already mirrored. */
   mirrored: boolean;
+  /** Points (artwork pixels) on cut lines the user removed; the nearest cut line to each point is left out. */
+  removedCuts: Array<{ x: number; y: number }>;
   /** Cut settings of this motif; new motifs start with the defaults. */
   cut: CutSettings;
 }
@@ -48,6 +50,8 @@ export const defaultCutSettings: CutSettings = {
 export interface StickerResult {
   res: BleedResult;
   loops: Loops;
+  /** Cut lines the user removed, kept to show them and restore them. */
+  removedLoops: Loops;
   dpi: number;
   bbox: { x0: number; y0: number; x1: number; y1: number; w: number; h: number };
 }
@@ -153,7 +157,7 @@ export async function loadMotifFiles(files: Iterable<File>, collection: Collecti
         heightMm: null,
         suggestedHeightMm: bbox && dpi && dpi > 0 ? Math.max(0.5, bbox.h / dpi * 25.4) : null,
         copies: '', noTransparency: !decoded.rgba.some((value, index) => index % 4 === 3 && value < 250),
-        thumbnail: decoded.thumbnail ?? '', mirrored: false, cut: { ...defaultCutSettings },
+        thumbnail: decoded.thumbnail ?? '', mirrored: false, removedCuts: [], cut: { ...defaultCutSettings },
       };
       collection.items.push(motif);
       added.push(motif);
@@ -177,7 +181,7 @@ export function duplicateMotif(collection: Collection, id: number): Motif | null
   const index = collection.items.findIndex((item) => item.id === id);
   if (index < 0) return null;
   const source = collection.items[index];
-  const copy: Motif = { ...source, id: collection.nextId++, name: uniqueName(collection, source.name), cut: { ...source.cut } };
+  const copy: Motif = { ...source, id: collection.nextId++, name: uniqueName(collection, source.name), cut: { ...source.cut }, removedCuts: source.removedCuts.map((p) => ({ ...p })) };
   collection.items.splice(index + 1, 0, copy);
   collection.selectedId = copy.id;
   // Pixels are shared until one of them is mirrored, which replaces its array.
@@ -196,13 +200,26 @@ export function mirrorMotif(motif: Motif): void {
   }
   motif.rgba = out;
   motif.mirrored = !motif.mirrored;
+  motif.removedCuts = motif.removedCuts.map((p) => ({ x: width - p.x, y: p.y }));
+}
+
+/** Remove one cut line: remember a point on it, in artwork pixels. */
+export function removeCut(motif: Motif, result: StickerResult, loop: Loops[number]): void {
+  const [x, y] = loop[Math.floor(loop.length / 2)];
+  motif.removedCuts.push({ x: x - result.res.pad, y: y - result.res.pad });
+}
+
+/** Bring a removed cut line back: forget every remembered point that lies on it. */
+export function restoreCut(motif: Motif, result: StickerResult, loop: Loops[number]): void {
+  const near = (p: { x: number; y: number }) => loop.some(([lx, ly]) => (lx - result.res.pad - p.x) ** 2 + (ly - result.res.pad - p.y) ** 2 < 4);
+  motif.removedCuts = motif.removedCuts.filter((p) => !near(p));
 }
 
 const resultCache = new WeakMap<Motif, { signature: string; value: StickerResult }>();
 
 export function computeSticker(motif: Motif, settings: CutSettings): StickerResult {
   if (motif.heightMm === null) throw new Error('Motif height missing');
-  const signature = JSON.stringify([motif.heightMm, motif.mirrored, settings]);
+  const signature = JSON.stringify([motif.heightMm, motif.mirrored, motif.removedCuts, settings]);
   const cached = resultCache.get(motif);
   if (cached?.signature === signature) return cached.value;
   const bbox = alphaBBox(motif.rgba, motif.width, motif.height, settings.alphaThreshold);
@@ -215,7 +232,19 @@ export function computeSticker(motif: Motif, settings: CutSettings): StickerResu
     smooth: settings.smooth, fillHoles: settings.fillHoles, bleedIntoHoles: settings.bleedIntoHoles,
     whiteBg: false, alphaThreshold: settings.alphaThreshold, erodePx: settings.erodePx,
   });
-  const value = { res, loops: cutPath(res.cut, res.width, res.height, {}), dpi, bbox };
+  const all = cutPath(res.cut, res.width, res.height, {});
+  const removed = new Set<number>();
+  // Cut lines move a little when settings change, so each removal picks the nearest line within about 2 mm.
+  const tolerance = Math.max(4, (2 / 25.4) * dpi);
+  for (const point of motif.removedCuts ?? []) {
+    const x = point.x + res.pad, y = point.y + res.pad;
+    let best = -1, bestD = Infinity;
+    all.forEach((loop, index) => {
+      for (const [lx, ly] of loop) { const d = (lx - x) ** 2 + (ly - y) ** 2; if (d < bestD) { bestD = d; best = index; } }
+    });
+    if (best >= 0 && bestD <= tolerance * tolerance) removed.add(best);
+  }
+  const value = { res, loops: all.filter((_, i) => !removed.has(i)), removedLoops: all.filter((_, i) => removed.has(i)), dpi, bbox };
   resultCache.set(motif, { signature, value });
   return value;
 }

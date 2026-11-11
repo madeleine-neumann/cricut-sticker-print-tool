@@ -197,7 +197,8 @@
       const toOutside = edt(outside, W, H, false).d2;
       const rounded = new Uint8Array(W * H);
       for (let i = 0; i < rounded.length; i++) rounded[i] = cut[i] || (grown[i] && toOutside[i] > r2) ? 1 : 0;
-      cut = rounded;
+      // Rounding can close a ring around an empty area; fill it like any other inner hole when asked.
+      cut = opts.fillHoles ? fillHoles(rounded, W, H) : rounded;
     }
 
     const dOut = edt(cut, W, H, false).d2;

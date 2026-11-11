@@ -47,12 +47,29 @@
     {#if model.result}
       <div class="preview-art" role="img" aria-label={$translations('cut.previewImage', { name: model.selected?.name ?? '' })} style:aspect-ratio={`${model.result.res.width} / ${model.result.res.height}`} style:width={`min(100%, ${Math.min(510, 510 * model.result.res.width / model.result.res.height)}px)`}>
         <canvas bind:this={canvas} aria-hidden="true"></canvas>
-        {#if showCut}<svg class="cut-overlay" viewBox={`0 0 ${model.result.res.width} ${model.result.res.height}`} preserveAspectRatio="none" aria-hidden="true"><path d={pathData(model.result.loops, 1)} /></svg>{/if}
+        {#if showCut}
+          <svg class="cut-overlay editable" viewBox={`0 0 ${model.result.res.width} ${model.result.res.height}`} preserveAspectRatio="none">
+            {#each model.result.loops as loop, index}
+              <g class="cut-line" role="button" tabindex="0" aria-label={$translations('cut.removeLine', { n: index + 1 })} onclick={() => model.toggleCut(index, false)} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); model.toggleCut(index, false); } }}>
+                <path class="hit" d={pathData([loop], 1)} /><path d={pathData([loop], 1)} />
+              </g>
+            {/each}
+            {#each model.result.removedLoops as loop, index}
+              <g class="cut-line removed" role="button" tabindex="0" aria-label={$translations('cut.restoreLine', { n: index + 1 })} onclick={() => model.toggleCut(index, true)} onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); model.toggleCut(index, true); } }}>
+                <path class="hit" d={pathData([loop], 1)} /><path d={pathData([loop], 1)} />
+              </g>
+            {/each}
+          </svg>
+        {/if}
       </div>
     {/if}
   </div>
   {#if model.result}
     {@const result = model.result}
+    <div class="cut-edit">
+      <p class="field-help">{$translations('cut.removeHint')}</p>
+      {#if result.removedLoops.length}<button type="button" class="apply-all" onclick={() => model.restoreAllCuts()}>{$translations('cut.restoreAll', { count: result.removedLoops.length })}</button>{/if}
+    </div>
     <dl class="preview-stats">
       <div><dt>{$translations('cut.artworkSize')}</dt><dd>{fmt(result.bbox.w / result.dpi * 25.4)} × {fmt(result.bbox.h / result.dpi * 25.4)} mm</dd></div>
       <div><dt>{$translations('cut.printSize')}</dt><dd>{fmt((result.res.bbox.x1 - result.res.bbox.x0) / result.dpi * 25.4)} × {fmt((result.res.bbox.y1 - result.res.bbox.y0) / result.dpi * 25.4)} mm</dd></div>

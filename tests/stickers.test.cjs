@@ -108,5 +108,32 @@ const vm = require('node:vm');
   mirrorMotif(copy);
   assert.equal(copy.mirrored, false);
   assert.deepEqual(Array.from(copy.rgba), before, 'mirroring twice restores the artwork');
+
+  // Removing single cut lines: a click point picks the nearest loop; it survives recomputation, mirroring and duplication.
+  const twoCollection = createCollection();
+  const two = new Uint8ClampedArray(40 * 20 * 4);
+  for (let y = 4; y < 16; y++) { for (let x = 3; x < 15; x++) two.set([30, 80, 180, 255], (y * 40 + x) * 4); for (let x = 28; x < 34; x++) two.set([30, 80, 180, 255], (y * 40 + x) * 4); }
+  await loadMotifFiles([{ ...file('two.png'), width: 40, height: 20 }], twoCollection, async () => ({ rgba: two, width: 40, height: 20 }));
+  const islands = twoCollection.items[0];
+  islands.heightMm = 20;
+  const cut = { ...defaultCutSettings, contourMm: 0, mergeMm: 0 };
+  assert.deepEqual(islands.removedCuts, []);
+  const full = computeSticker(islands, cut);
+  assert.equal(full.loops.length, 2);
+  const smallLoop = full.loops.find((l) => Math.min(...l.map((p) => p[0])) > full.res.pad + 20);
+  const [px, py] = smallLoop[0];
+  islands.removedCuts.push({ x: px - full.res.pad, y: py - full.res.pad });
+  const trimmed = computeSticker(islands, cut);
+  assert.equal(trimmed.loops.length, 1, 'clicked cut line is removed');
+  assert.equal(trimmed.removedLoops.length, 1, 'removed cut line is kept for display');
+  assert.ok(Math.min(...trimmed.loops[0].map((p) => p[0])) < full.res.pad + 20, 'the other cut line stays');
+  assert.equal(computeSticker(islands, { ...cut, bleedMm: 3 }).loops.length, 1, 'removal survives other settings');
+  const islandCopy = duplicateMotif(twoCollection, islands.id);
+  islandCopy.removedCuts.length = 0;
+  assert.equal(islands.removedCuts.length, 1, 'duplicates keep their own removed cut lines');
+  mirrorMotif(islands);
+  const mirroredResult = computeSticker(islands, cut);
+  assert.equal(mirroredResult.loops.length, 1, 'removal follows the mirrored artwork');
+  assert.ok(Math.max(...mirroredResult.loops[0].map((p) => p[0])) > mirroredResult.res.pad + 20, 'the large piece is mirrored to the right');
   console.log('Sticker load, limits, selection, DPI, alpha warning, cache and legacy parity OK');
 })().catch((error) => { console.error(error); process.exitCode = 1; });
