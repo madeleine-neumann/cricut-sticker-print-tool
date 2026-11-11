@@ -253,6 +253,8 @@
         if (opts.borderMode === "color") {
           out[o] = color[0]; out[o + 1] = color[1]; out[o + 2] = color[2]; out[o + 3] = 255;
         }
+      } else if (round > 0 && bleed <= 0 && cut[i]) {
+        // area the rounded cut line adds around the artwork: without bleed it stays unprinted paper
       } else if (bleedRegion[i]) { // bleed: the nearest artwork color
         const s = near.idx[i] * 4;
         out[o] = rgbaP[s]; out[o + 1] = rgbaP[s + 1]; out[o + 2] = rgbaP[s + 2]; out[o + 3] = 255;

@@ -50,7 +50,7 @@ export const en = {
   'cut.paths': 'Cut paths',
   'cut.lowResolution': 'The resolution is low. Use a larger image or reduce the artwork height.',
   'cut.contour': "Contour smoothing",
-  'cut.contourHelp': "Rounds the cut line so the blade does not tear fine spikes and narrow gaps. Larger = smoother line with a little more margin around the artwork; 0 follows the artwork edge exactly.",
+  'cut.contourHelp': "Rounds the cut line so the blade does not tear fine spikes and narrow gaps. Larger = smoother line with a little more margin around the artwork; without bleed that margin stays blank paper, with bleed it is filled in the artwork colour. 0 follows the artwork edge exactly.",
   'cut.removeHint': "Click a cut line to remove it – for example around small holes or slivers. Removed lines show as red dashes; click again to bring them back.",
   'cut.removeLine': "Remove cut line {n}",
   'cut.restoreLine': "Restore removed cut line {n}",

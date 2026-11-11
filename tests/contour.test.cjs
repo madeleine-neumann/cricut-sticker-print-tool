@@ -38,6 +38,18 @@ const assert = require('node:assert/strict');
   const inside = smooth.cut.reduce((n, v, i) => n + (v && smooth.rgba[i * 4 + 3] === 0 ? 1 : 0), 0);
   assert.equal(inside, 0, 'everything inside the cut line prints');
   assert.ok(smooth.loops === undefined);
+  // Without bleed, the area the rounding adds around the artwork stays unprinted paper, not artwork colour.
+  const noBleed = engine.computeBleed(rgba, W, H, { ...base, bleedPx: 0, roundPx: r });
+  let added = 0, painted = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y + noBleed.pad) * noBleed.width + x + noBleed.pad;
+    if (noBleed.cut[i] && rgba[(y * W + x) * 4 + 3] === 0) { added++; if (noBleed.rgba[i * 4 + 3] > 0) painted++; }
+  }
+  assert.ok(added > 100, 'rounding adds area around the artwork');
+  assert.ok(painted < added * 0.05, `no bleed colour is added without bleed (${painted} of ${added} px painted)`);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (rgba[(y * W + x) * 4 + 3] >= 128) assert.equal(noBleed.rgba[((y + noBleed.pad) * noBleed.width + x + noBleed.pad) * 4 + 3], 255, 'artwork still prints');
+  }
   // A ring with a narrow opening: rounding closes the opening and would leave a new inner hole.
   const ring = new Uint8ClampedArray(W * H * 4);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
