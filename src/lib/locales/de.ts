@@ -72,7 +72,7 @@ export const de = {
   'sheet.upOn.letter': 'US Letter: mehrere Matten pro Blatt',
   'sheet.upOn.a4': 'A4: mehrere Matten pro Blatt',
   'sheet.fitMat': 'An den Schneidebereich der Cricut-Matte anpassen',
-  'sheet.fitMatHelp': 'Dieses Format ist größer als der Schneidebereich der Cricut-Matte ({w} × {h} mm). Mit dieser Option bleiben die Sticker innerhalb des Bereichs. Nur der SVG-Seitenumriss wird gekürzt; PDF und PNG behalten das volle Papierformat.',
+  'sheet.fitMatHelp': "Dieses Format ist größer als der Schneidebereich der Cricut-Matte ({w} × {h} mm). Mit dieser Option bleiben alle Sticker innerhalb des Bereichs. Druck- und Schnittdatei haben weiterhin genau dieselbe Seitengröße.",
   'sheet.layout': 'Anordnung',
   'sheet.layout.grid': 'Einfaches Raster',
   'sheet.layout.nested': 'Platzsparend',
@@ -121,9 +121,9 @@ export const de = {
   'export.printPng': 'PNG herunterladen',
   'export.printBrowser': 'Im Browser drucken',
   'export.cut': 'Schnittdatei',
-  'export.cutHelp': 'Die SVG enthält die Schnittkonturen an denselben Positionen wie die Druckdatei.',
+  'export.cutHelp': "Die SVG hat dieselbe Seitengröße und dieselben Positionen wie die Druckdatei. Den Rahmen mit dem Stift auf die Matte zeichnen lassen und das Papier oben links bündig hineinlegen.",
   'export.cutSvg': 'Schnitt-SVG herunterladen',
-  'export.pageOutline': 'Seitenumriss einfügen',
+  'export.pageOutline': "Papierrahmen zum Anlegen einfügen",
   'export.combinedSvg': 'Druck und Schnitt als SVG',
   'export.singlePng': 'Einzelmotiv als PNG',
   'export.singleSvg': 'Einzelmotiv als SVG',
@@ -136,7 +136,7 @@ export const de = {
   'export.printOpened': 'Druckdialog geöffnet. Wähle 100 % bzw. „Tatsächliche Größe“ und keinen zusätzlichen Rand.',
   'export.printFailed': 'Der Browser konnte den Druckdialog nicht öffnen. Speichere stattdessen das PDF und drucke daraus.',
   'export.printPrepareFailed': 'Der Druck konnte nicht vorbereitet werden.',
-  'export.trimOverflow': 'Einige Sticker ragen über den Schneidebereich der Cricut-Matte. Der SVG-Umriss wurde deshalb nicht gekürzt. Erhöhe den Seitenrand.',
+  'export.trimOverflow': "Einige Sticker liegen außerhalb des Schneidebereichs der Cricut-Matte und werden nicht geschnitten. Aktiviere „An den Schneidebereich der Cricut-Matte anpassen“ oder erhöhe den Seitenrand.",
   'export.dpi': 'Auflösung',
   'error.notImage': '{name} ist keine unterstützte Bilddatei. Verwende PNG oder WebP.',
   'error.fileUnreadable': 'Die Datei {name} konnte nicht gelesen werden. Prüfe das Bildformat oder verwende eine kleinere Datei.',
@@ -167,7 +167,7 @@ export const de = {
   'guide.exportTitle': '4. Drucken und schneiden',
   'guide.exportBody': 'Lade Druckdatei und Schnitt-SVG zusammen herunter. Drucke mit 100 % / tatsächlicher Größe und prüfe den ersten Ausdruck mit einem Lineal. Die SVG-Konturen haben dieselben Positionen wie das Druckbild.',
   'guide.cricutTitle': '5. In Cricut Design Space ausrichten',
-  'guide.cricutBody': 'Importiere die Schnitt-SVG, verbinde die Konturen mit Attach und nutze einen optionalen Seitenumriss als Pen-Markierung. Lege den Ausdruck an der Markierung auf die Matte und starte den Schnitt.',
+  'guide.cricutBody': "Importiere die Schnitt-SVG, wähle alle Ebenen aus und verbinde sie mit „Attach“. Stelle die Ebene „page-outline“ auf Zeichnen (Pen) und blende „calibration-1cm“ aus. Lass den Rahmen auf die Matte zeichnen und lege den Ausdruck oben links bündig an die Linien. Ist das Papier größer als der Schneidebereich (z. B. A4), fehlt dem Rahmen die Unterkante, und das Papier steht unten über. Prüfe vorher, ob das Kontrollquadrat genau 10 mm misst.",
 } as const;
 
 export type TranslationKey = keyof typeof de;

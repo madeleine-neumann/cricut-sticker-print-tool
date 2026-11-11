@@ -124,9 +124,24 @@ const vm = require('node:vm');
   assert.equal((cut.svg.match(/<path id="cut-/g) || []).length, 4, 'one cut path per sticker');
   assert.match(cut.svg, /id="page-outline"/);
   assert.doesNotMatch(exporter.sheetCutFile(plan, { ...defaultSheetSettings, paper: 'a4', pageOutline: false }, null).svg, /page-outline/);
-  const trimmed = exporter.sheetCutFile(plan, { ...defaultSheetSettings, paper: 'a4', fitMat: true }, null);
-  assert.ok(trimmed.trim, 'A4 SVG is shortened to the Cricut mat');
-  assert.match(trimmed.svg, /height="11\.4961in"/);
+  // The SVG must match the print file exactly: same page size and coordinates, never shortened.
+  const matFit = exporter.sheetCutFile(plan, { ...defaultSheetSettings, paper: 'a4', fitMat: true }, null);
+  assert.match(matFit.svg, /width="8.2677in" height="11.6929in"/, "SVG keeps the full A4 page like the PDF");
+  const fullGeo = exporter.geometryFor(plan, plan.layout, exporter.sheetDpiFor(plan, defaultSheetSettings));
+  assert.match(matFit.svg, new RegExp(`viewBox="0 0 ${fullGeo.pageW} ${fullGeo.pageH}"`), 'SVG uses the print coordinates');
+  // A4 is taller than the Cricut cutting area (292 mm), so the drawn frame is open at the bottom.
+  const outline = matFit.svg.match(/<g id="page-outline"[^>]*>\s*<path d="([^"]+)"/);
+  assert.ok(outline, 'page outline is an open path on paper larger than the mat');
+  assert.doesNotMatch(outline[1], /Z/i, 'frame has no bottom edge');
+  const ys = [...outline[1].matchAll(/[MLVH]?\s*(-?[\d.]+)/g)];
+  const limit = 292 / 25.4 * exporter.sheetDpiFor(plan, defaultSheetSettings);
+  assert.ok(outline[1].startsWith('M0,') && outline[1].includes(`H${fullGeo.pageW}`), 'frame starts at the paper corner and spans the full width');
+  assert.ok(Math.abs(Number(outline[1].match(/^M0,([\d.]+)/)[1]) - limit) < 1, 'frame sides end at the cutting area limit');
+  assert.ok(ys.length > 0);
+  const loose = exporter.sheetCutFile(plan, { ...defaultSheetSettings, paper: 'a4', fitMat: false }, null);
+  assert.match(loose.svg, /<g id="page-outline"[^>]*>\s*<path/, 'A4 never gets a closed frame the mat cannot draw');
+  const letterPlan = (await planSheet([entry(rect, 4)], { ...defaultSheetSettings, paper: 'letter', arrangement: 'grid' })).plan;
+  assert.match(exporter.sheetCutFile(letterPlan, { ...defaultSheetSettings, paper: 'letter' }, null).svg, /<g id="page-outline"[^>]*>\s*<rect/, 'Letter fits the mat and keeps a closed frame');
   assert.equal(exporter.sheetFileName(plan, '.pdf'), 'rect_sheet-a4.pdf');
   const pdf = await exporter.sheetPdf(new Uint8ClampedArray(4 * 4 * 4).fill(255), 4, 4, plan.layout);
   const pdfText = Buffer.from(pdf).toString('latin1');

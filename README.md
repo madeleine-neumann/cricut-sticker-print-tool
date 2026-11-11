@@ -23,7 +23,7 @@ Ein **Kontrollquadrat von 1 × 1 cm** wird mitgedruckt. Misst es nach dem Druck 
 | Druck und Schnitt als SVG | Druckbild und Konturen in einer Datei für Print-then-Cut. |
 | Einzelmotiv | Das gewählte Motiv mit Beschnitt als PNG, als Schnitt-SVG oder kombiniert. |
 
-Ist das Papier größer als der Schneidebereich der Cricut-Matte (z. B. A4 mit 297 mm gegenüber 292 mm), bleiben die Sticker auf Wunsch innerhalb des Bereichs, und nur der SVG-Seitenumriss wird gekürzt.
+Druck- und Schnittdatei haben immer dieselbe Seitengröße und dieselben Koordinaten. Ist das Papier größer als der Schneidebereich der Cricut-Matte (z. B. A4 mit 297 mm auf der 12 × 12″-Matte mit 292 mm), bleiben die Sticker auf Wunsch innerhalb des Bereichs. Der Papierrahmen in der SVG beginnt an der oberen linken Papierecke und hat dann keine Unterkante: Rahmen auf die Matte zeichnen lassen, Papier oben links bündig anlegen, unten steht es über.
 
 ### Datenschutz
 
@@ -82,7 +82,7 @@ A **1 × 1 cm check square** is printed on the sheet. If it measures exactly 10 
 | Print and cut SVG | Print image and contours in one file for Print Then Cut. |
 | Single artwork | The selected artwork with bleed as PNG, cut SVG or combined. |
 
-When the paper is larger than the Cricut mat cutting area (for example A4 at 297 mm versus 292 mm), stickers can be kept inside that area and only the SVG page outline is shortened.
+Print and cut files always share the same page size and coordinates. When the paper is larger than the Cricut mat cutting area (for example A4 at 297 mm on the 12 × 12 in mat with 292 mm), stickers can be kept inside that area. The paper frame in the SVG then starts at the paper's top-left corner and has no bottom edge: let the machine draw it on the mat, place the paper flush into the top-left corner, and let it stick out at the bottom.
 
 ### Privacy
 

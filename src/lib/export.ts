@@ -1,4 +1,4 @@
-import { cutSvg, pdfFromRgba, pngSetDpi, sheetGeometryMulti, sheetSvg, type SheetGeometry } from './engine/index.js';
+import { PAPER, cutSvg, pdfFromRgba, pngSetDpi, sheetGeometryMulti, sheetSvg, type SheetGeometry } from './engine/index.js';
 import { matLimited, type Notice, type PlanLayout, type SheetEntry, type SheetPlan, type SheetSettings } from './sheets.ts';
 import type { Motif, StickerResult } from './stickers.ts';
 
@@ -19,26 +19,46 @@ export function sheetFileName(plan: SheetPlan, suffix: string, layout: PlanLayou
   return `${base}_sheet-${layout.paperSlug || 'sheet'}${suffix}`;
 }
 
-export interface CutLayout { layout: PlanLayout; dpi: number; geo: SheetGeometry; svgGeo: SheetGeometry; trim: { w: number; h: number } | null; overflow: boolean }
+export interface CutLayout { layout: PlanLayout; dpi: number; geo: SheetGeometry; matArea: { w: number; h: number } | null; overflow: boolean }
 
-/** The SVG files describe one mat sheet (one Cricut job), shortened to the mat's cutting area when asked. */
+/**
+ * The SVG describes one mat sheet (one Cricut job) on exactly the same page and coordinates as the print file.
+ * When the paper is larger than the mat's cutting area, `matArea` holds that area in sheet pixels.
+ */
 export function cutLayout(plan: SheetPlan, settings: SheetSettings): CutLayout {
   const layout = plan.matLayout ?? plan.layout, dpi = sheetDpiFor(plan, settings), geo = geometryFor(plan, layout, dpi);
-  let svgGeo = geo, trim: CutLayout['trim'] = null, overflow = false;
-  if (matLimited(settings.paper) && settings.fitMat && layout.limWMm && (layout.limWMm < layout.pageWMm - 0.05 || layout.limHMm < layout.pageHMm - 0.05)) {
-    const tw = Math.min(geo.pageW, Math.round((layout.limWMm / 25.4) * dpi)), th = Math.min(geo.pageH, Math.round((layout.limHMm / 25.4) * dpi));
-    let maxX = 0, maxY = 0;
-    for (const d of geo.paths) for (const m of d.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)) { maxX = Math.max(maxX, +m[1]); maxY = Math.max(maxY, +m[2]); }
-    for (const sq of layout.calibration ?? []) { maxX = Math.max(maxX, (sq.x + sq.size) / 25.4 * dpi); maxY = Math.max(maxY, (sq.y + sq.size) / 25.4 * dpi); }
-    if (maxX <= tw && maxY <= th) { trim = { w: tw, h: th }; svgGeo = { ...geo, pageW: tw, pageH: th }; }
-    else overflow = true;
-  }
-  return { layout, dpi, geo, svgGeo, trim, overflow };
+  const paper = PAPER[settings.paper];
+  if (!matLimited(settings.paper) || plan.matLayout) return { layout, dpi, geo, matArea: null, overflow: false };
+  const portrait = layout.pageWMm <= layout.pageHMm;
+  const limW = portrait ? paper.limW : paper.limH, limH = portrait ? paper.limH : paper.limW;
+  const matArea = { w: Math.min(geo.pageW, (limW / 25.4) * dpi), h: Math.min(geo.pageH, (limH / 25.4) * dpi) };
+  let maxX = 0, maxY = 0;
+  for (const d of geo.paths) for (const m of d.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)) { maxX = Math.max(maxX, +m[1]); maxY = Math.max(maxY, +m[2]); }
+  for (const sq of layout.calibration ?? []) { maxX = Math.max(maxX, (sq.x + sq.size) / 25.4 * dpi); maxY = Math.max(maxY, (sq.y + sq.size) / 25.4 * dpi); }
+  return { layout, dpi, geo, matArea, overflow: maxX > matArea.w + 0.5 || maxY > matArea.h + 0.5 };
+}
+
+/**
+ * A pen frame that starts at the paper's top-left corner. Cricut Design Space aligns an import to its outermost
+ * shape, so the frame pins the cut paths to the paper. Edges beyond the cutting area are left out: the paper
+ * sticks out there instead of the frame being drawn smaller than the paper.
+ */
+export function openFrame(pageW: number, pageH: number, area: { w: number; h: number }): string {
+  const w = +Math.min(pageW, area.w).toFixed(2), h = +Math.min(pageH, area.h).toFixed(2);
+  const fullW = w >= pageW - 0.5, fullH = h >= pageH - 0.5;
+  let d = `M0,${h}V0H${w}`;
+  if (fullW) d += `V${h}`;
+  if (fullW && fullH) d += 'Z';
+  return `  <g id="page-outline" fill="none" stroke="#000000" stroke-width="1">\n    <path d="${d}"/>\n  </g>\n`;
 }
 
 export function sheetCutFile(plan: SheetPlan, settings: SheetSettings, imageHref: string | null) {
   const cut = cutLayout(plan, settings);
-  const svg = withCalibrationLayer(sheetSvg(cut.svgGeo, cut.dpi, imageHref, { outline: settings.pageOutline }), cut.layout, cut.dpi);
+  let svg = sheetSvg(cut.geo, cut.dpi, imageHref, { outline: settings.pageOutline && !cut.matArea });
+  if (settings.pageOutline && cut.matArea) svg = svg.replace('  <g id="cut"', `${openFrame(cut.geo.pageW, cut.geo.pageH, cut.matArea)}  <g id="cut"`);
+  svg = withCalibrationLayer(svg, cut.layout, cut.dpi);
+  // Same physical size as the PDF page, which stretches the same pixels to the exact paper size.
+  svg = svg.replace(/width="[\d.]+in" height="[\d.]+in"/, `width="${(cut.layout.pageWMm / 25.4).toFixed(4)}in" height="${(cut.layout.pageHMm / 25.4).toFixed(4)}in"`);
   return { ...cut, svg, filename: sheetFileName(plan, imageHref ? '_print-and-cut.svg' : '_cut.svg', cut.layout) };
 }
 
@@ -212,13 +232,7 @@ export async function exportSheet(kind: SheetExportKind, plan: SheetPlan, settin
       if (kind === 'both') {
         const canvas = drawSheet(cut.geo, false, plan.entries);
         drawScissors(canvas, cut.layout);
-        let printCanvas = canvas;
-        if (cut.trim) {
-          printCanvas = document.createElement('canvas');
-          printCanvas.width = cut.trim.w; printCanvas.height = cut.trim.h;
-          printCanvas.getContext('2d')?.drawImage(canvas, 0, 0);
-        }
-        href = await blobToDataUrl(await canvasPngBlob(printCanvas, cut.dpi));
+        href = await blobToDataUrl(await canvasPngBlob(canvas, cut.dpi));
       }
       const file = sheetCutFile(plan, settings, href);
       report(download(file.filename, new Blob([file.svg], { type: 'image/svg+xml' })));
