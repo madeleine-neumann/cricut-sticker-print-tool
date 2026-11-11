@@ -2,28 +2,50 @@ import { PAPER, anglesFor, fillHoles, layoutSheet, nestGen, type Footprint, type
 import type { TranslationKey } from './locales/de.ts';
 import type { Motif, StickerResult } from './stickers.ts';
 
-export type PaperKey = 'letter' | 'a4' | 's9x12' | 's12x12' | 'joyxtra' | 'joy2' | 'joy2long';
-export const paperKeys: PaperKey[] = ['letter', 'a4', 's9x12', 's12x12', 'joyxtra', 'joy2', 'joy2long'];
+export type PaperKey = 'letter' | 'a4' | 's9x12' | 's12x12';
+export const paperKeys: PaperKey[] = ['a4', 'letter', 's9x12', 's12x12'];
+
+/**
+ * Cricut machine mats: physical size and maximum cutting area in millimetres (portrait, feed direction = height).
+ * Sources: Cricut help center (12 × 12, Venture 24 × 28, Joy Xtra) and Cricut-adjacent guides (12 × 24, Joy).
+ */
+export interface MatSpec { w: number; h: number; cutW: number; cutH: number; slug: string }
+const inch = (value: number) => value * 25.4;
+export const MATS = {
+  m12x12: { w: inch(12), h: inch(12), cutW: inch(11.5), cutH: inch(11.5), slug: 'mat-12x12' },
+  m12x24: { w: inch(12), h: inch(24), cutW: inch(11.5), cutH: inch(23.5), slug: 'mat-12x24' },
+  v24x28: { w: inch(24), h: inch(28), cutW: inch(23.5), cutH: inch(27.5), slug: 'venture-24x28' },
+  jx8x12: { w: inch(8.5), h: inch(12), cutW: inch(8.25), cutH: inch(11.75), slug: 'joy-xtra-8.5x12' },
+  j45x65: { w: inch(4.5), h: inch(6.5), cutW: inch(4.25), cutH: inch(6.25), slug: 'joy-4.5x6.5' },
+  j45x12: { w: inch(4.5), h: inch(12), cutW: inch(4.25), cutH: inch(11.75), slug: 'joy-4.5x12' },
+} satisfies Record<string, MatSpec>;
+export type MatKey = keyof typeof MATS;
+export type MachineKey = 'maker' | 'venture' | 'joyxtra' | 'joy' | 'none';
+export const MACHINES: Record<MachineKey, MatKey[]> = {
+  maker: ['m12x12', 'm12x24'], venture: ['v24x28'], joyxtra: ['jx8x12'], joy: ['j45x65', 'j45x12'], none: [],
+};
+export const machineKeys = Object.keys(MACHINES) as MachineKey[];
 export type RotationMode = 'none' | '180' | '90' | '45' | '15';
 
 export interface SheetSettings {
   paper: PaperKey;
-  upOn: 'none' | 'letter' | 'a4';
+  /** The cutting machine and mat; stickers are only placed inside the mat's cutting area. */
+  machine: MachineKey;
+  mat: MatKey | null;
   arrangement: 'nest' | 'grid';
   rotation: RotationMode;
   orientation: 'auto' | 'portrait' | 'landscape';
   marginMm: number;
   gapMm: number;
   dpiCap: 300 | 600;
-  fitMat: boolean;
   pageOutline: boolean;
   /** Print a 1 × 1 cm square to check print scaling. */
   calibration: boolean;
 }
 
 export const defaultSheetSettings: SheetSettings = {
-  paper: 'letter', upOn: 'none', arrangement: 'nest', rotation: '90', orientation: 'auto',
-  marginMm: 6, gapMm: 1, dpiCap: 300, fitMat: true, pageOutline: true, calibration: true,
+  paper: 'letter', machine: 'maker', mat: 'm12x12', arrangement: 'nest', rotation: '90', orientation: 'auto',
+  marginMm: 6, gapMm: 1, dpiCap: 300, pageOutline: true, calibration: true,
 };
 
 export interface SheetEntry { motif: Motif; result: StickerResult; want: number }
@@ -69,10 +91,14 @@ export function formatNotice(notice: Notice, translate: (key: TranslationKey, pa
   return translate(notice.key, params);
 }
 
-/** True when the paper is bigger than the Cricut mat's cutting area on at least one side. */
-export function matLimited(key: string): boolean {
-  const paper = PAPER[key];
-  return !!paper && (paper.limW < paper.w - 0.05 || paper.limH < paper.h - 0.05);
+export interface MatInfo { mat: MatSpec | null; fitsOnMat: boolean; limitedByMat: boolean }
+
+/** How the chosen paper relates to the chosen mat, for hints in the interface. */
+export function matInfo(settings: Pick<SheetSettings, 'paper' | 'machine' | 'mat'>): MatInfo {
+  const paper = PAPER[settings.paper], mat = settings.machine === 'none' || !settings.mat ? null : MATS[settings.mat];
+  if (!mat) return { mat: null, fitsOnMat: true, limitedByMat: false };
+  const fitsOnMat = (paper.w <= mat.w + 0.01 && paper.h <= mat.h + 0.01) || (paper.h <= mat.w + 0.01 && paper.w <= mat.h + 0.01);
+  return { mat, fitsOnMat, limitedByMat: fitsOnMat && (paper.w > mat.cutW + 0.01 || paper.h > mat.cutH + 0.01) };
 }
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -188,86 +214,98 @@ export function tilesFor(entries: SheetEntry[]): SheetTile[] {
   });
 }
 
-interface Resolved { key: string; paper: PaperFormat; fitMat: boolean; upOn: 'none' | 'letter' | 'a4'; orientation: SheetSettings['orientation'] }
+/** A page to lay out on, already turned to its orientation; limW/limH hold the mat's cutting area. */
+interface Frame { key: string; paper: PaperFormat; orientation: 'portrait' | 'landscape' }
+interface Resolved { frames: Frame[]; tileOn: PaperFormat | null }
 
-function resolvePaper(settings: SheetSettings): Resolved {
-  const paper = PAPER[settings.paper];
-  const upOn = paper.up ? settings.upOn : 'none';
-  const orientation = upOn === 'none' ? settings.orientation : 'portrait';
-  // The long mat is taller than Letter or A4, so for two side by side it is cut short to what the page holds.
-  if (settings.paper === 'joy2long' && upOn !== 'none') {
-    const big = PAPER[upOn], m = Math.max(0, settings.marginMm);
-    const w = Math.max(1, Math.min(paper.limW, (big.w - 2 * m) / 2)), h = Math.max(1, Math.min(paper.limH, big.h - 2 * m));
-    // layoutSheet reads formats by key, so the shortened mat is registered like in the original tool.
-    PAPER._joy2longup = { name: paper.name, slug: paper.slug, w, h, limW: w, limH: h };
-    return { key: '_joy2longup', paper: PAPER._joy2longup, fitMat: false, upOn, orientation };
-  }
-  return { key: settings.paper, paper, fitMat: matLimited(settings.paper) && settings.fitMat, upOn, orientation };
+function register(key: string, base: { name: string; slug: string }, w: number, h: number, limW: number, limH: number): PaperFormat {
+  // layoutSheet reads formats by key, so the effective page is registered in the shared table.
+  PAPER[key] = { name: base.name, slug: base.slug, w, h, limW: Math.min(w, limW), limH: Math.min(h, limH) };
+  return PAPER[key];
 }
 
-interface NestBest { placements: SheetPlacement[]; count: number; perItem: number[]; ori: 'portrait' | 'landscape'; pw: number; ph: number; lw: number; lh: number }
+function resolveFrames(settings: SheetSettings): Resolved {
+  const paper = PAPER[settings.paper];
+  const mat = settings.machine === 'none' || !settings.mat ? null : MATS[settings.mat];
+  const frames: Frame[] = [];
+  for (const orientation of ['portrait', 'landscape'] as const) {
+    if (settings.orientation !== 'auto' && settings.orientation !== orientation) continue;
+    const [w, h] = orientation === 'portrait' ? [paper.w, paper.h] : [paper.h, paper.w];
+    // The paper lies on the mat with its top-left corner at the mat origin; it must fit the mat itself.
+    if (mat && (w > mat.w + 0.01 || h > mat.h + 0.01)) continue;
+    const key = `_sheet_${orientation}`;
+    frames.push({ key, orientation, paper: register(key, paper, w, h, mat ? mat.cutW : w, mat ? mat.cutH : h) });
+  }
+  if (frames.length) return { frames, tileOn: null };
+  if (settings.orientation !== 'auto') {
+    const any = resolveFrames({ ...settings, orientation: 'auto' });
+    if (!any.tileOn) return any;
+  }
+  // The paper is larger than the mat: print mat-sized areas that are cut apart and placed on the mat one by one.
+  const m = Math.max(0, settings.marginMm), spec = mat as MatSpec;
+  const shortest = Math.min(paper.w, paper.h) - 2 * m, longest = Math.max(paper.w, paper.h) - 2 * m;
+  const w = Math.max(1, Math.min(spec.w, shortest)), h = Math.max(1, Math.min(spec.h, longest));
+  const region = register('_mat', { name: paper.name, slug: spec.slug }, w, h, spec.cutW, spec.cutH);
+  return { frames: [{ key: '_mat', paper: region, orientation: 'portrait' }], tileOn: paper };
+}
 
-async function runNest(entries: SheetEntry[], tiles: SheetTile[], settings: SheetSettings, resolved: Resolved, cancelled: () => boolean): Promise<NestBest | null | 'cancelled'> {
-  const { paper } = resolved;
+interface NestBest { placements: SheetPlacement[]; count: number; perItem: number[] }
+
+async function runNest(entries: SheetEntry[], tiles: SheetTile[], settings: SheetSettings, frame: Frame, cancelled: () => boolean): Promise<NestBest | null | 'cancelled'> {
+  const { paper } = frame;
   const items = entries.map((e, i) => ({ foot: footprint(e.result, 0.5), tileWMm: tiles[i].wMm, tileHMm: tiles[i].hMm, want: e.want }));
-  const orients = resolved.orientation === 'auto' ? ['portrait', 'landscape'] as const : [resolved.orientation];
   let best: NestBest | null = null, lastYield = Date.now();
-  for (const ori of orients) {
-    for (const crit of ['top', 'bottom'] as const) {
-      const port = ori === 'portrait';
-      const pw = port ? paper.w : paper.h, ph = port ? paper.h : paper.w;
-      const lw = resolved.fitMat ? Math.min(pw, port ? paper.limW : paper.limH) : pw;
-      const lh = resolved.fitMat ? Math.min(ph, port ? paper.limH : paper.limW) : ph;
-      const gen = nestGen({ pageWMm: lw, pageHMm: lh, marginMm: settings.marginMm, gapMm: settings.gapMm, items, angles: anglesFor(settings.rotation), cellMm: 0.5, crit });
-      let step = gen.next();
-      while (!step.done) {
-        if (Date.now() - lastYield > 12) { await tick(); lastYield = Date.now(); }
-        if (cancelled()) return 'cancelled';
-        step = gen.next();
-      }
-      if (!best || step.value.count > best.count) best = { ...step.value, ori, pw, ph, lw, lh };
+  for (const crit of ['top', 'bottom'] as const) {
+    const gen = nestGen({ pageWMm: paper.limW, pageHMm: paper.limH, marginMm: settings.marginMm, gapMm: settings.gapMm, items, angles: anglesFor(settings.rotation), cellMm: 0.5, crit });
+    let step = gen.next();
+    while (!step.done) {
+      if (Date.now() - lastYield > 12) { await tick(); lastYield = Date.now(); }
+      if (cancelled()) return 'cancelled';
+      step = gen.next();
     }
+    if (!best || step.value.count > best.count) best = step.value;
   }
   return best;
+}
+
+async function planFrame(entries: SheetEntry[], tiles: SheetTile[], settings: SheetSettings, frame: Frame, cancelled: () => boolean): Promise<{ layout: PlanLayout; nestedNoGain: boolean } | 'cancelled'> {
+  const { paper } = frame, cell = { w: tiles[0].wMm, h: tiles[0].hMm };
+  const base = { orientation: frame.orientation, pageWMm: paper.w, pageHMm: paper.h, limWMm: paper.limW, limHMm: paper.limH, paperName: paper.name, paperSlug: paper.slug };
+  if (entries.length === 1) {
+    const copies = entries[0].want;
+    const grid: PlanLayout = { ...layoutSheet({ paper: frame.key, orientation: 'portrait', marginMm: settings.marginMm, gapMm: settings.gapMm, cellWMm: cell.w, cellHMm: cell.h, copies, fitMat: true }), orientation: frame.orientation };
+    if (settings.arrangement !== 'nest') return { layout: grid, nestedNoGain: false };
+    const best = await runNest(entries, tiles, settings, frame, cancelled);
+    if (best === 'cancelled') return 'cancelled';
+    const gridCount = grid.fits ? grid.count : 0;
+    if (!best || best.count <= gridCount) return { layout: grid, nestedNoGain: true };
+    return { layout: { ...base, count: best.count, capacity: best.count, capped: copies > 0 && copies > best.count, fits: true, placements: best.placements, nested: true, gridCount }, nestedNoGain: false };
+  }
+  const best = await runNest(entries, tiles, settings, frame, cancelled);
+  if (best === 'cancelled') return 'cancelled';
+  return { layout: {
+    ...base, count: best ? best.count : 0, capacity: best ? best.count : 0, capped: false, fits: !!(best && best.count > 0),
+    placements: best ? best.placements : [], nested: true, perItem: best ? best.perItem : entries.map(() => 0),
+  }, nestedNoGain: false };
 }
 
 /** Arrange every sticker on the page. Returns null when cancelled. */
 export async function planSheet(entries: SheetEntry[], settings: SheetSettings, options: { cancelled?: () => boolean } = {}): Promise<PlanOutcome | null> {
   const cancelled = options.cancelled ?? (() => false);
   if (cancelled()) return null;
-  const tiles = tilesFor(entries), resolved = resolvePaper(settings), { paper } = resolved;
+  const tiles = tilesFor(entries), resolved = resolveFrames(settings);
   const multi = entries.length > 1;
   const summary: Notice[] = [], warnings: Notice[] = [];
   const cell = { w: tiles[0].wMm, h: tiles[0].hMm };
-  let layout: PlanLayout, nestedNoGain = false;
-
-  if (!multi) {
-    const copies = entries[0].want;
-    const grid = layoutSheet({ paper: resolved.key, orientation: resolved.orientation, marginMm: settings.marginMm, gapMm: settings.gapMm, cellWMm: cell.w, cellHMm: cell.h, copies, fitMat: resolved.fitMat });
-    layout = grid;
-    if (settings.arrangement === 'nest') {
-      const best = await runNest(entries, tiles, settings, resolved, cancelled);
-      if (best === 'cancelled') return null;
-      const gridCount = grid.fits ? grid.count : 0;
-      if (best && best.count > gridCount) {
-        layout = {
-          orientation: best.ori, pageWMm: best.pw, pageHMm: best.ph, limWMm: best.lw, limHMm: best.lh, paperName: paper.name, paperSlug: paper.slug,
-          count: best.count, capacity: best.count, capped: copies > 0 && copies > best.count,
-          fits: true, placements: best.placements, nested: true, gridCount,
-        };
-      } else nestedNoGain = true;
-    }
-  } else {
-    const best = await runNest(entries, tiles, settings, resolved, cancelled);
-    if (best === 'cancelled') return null;
-    layout = {
-      orientation: best ? best.ori : 'portrait', pageWMm: best ? best.pw : paper.w, pageHMm: best ? best.ph : paper.h,
-      limWMm: best ? best.lw : paper.w, limHMm: best ? best.lh : paper.h, paperName: paper.name, paperSlug: paper.slug,
-      count: best ? best.count : 0, capacity: best ? best.count : 0, capped: false,
-      fits: !!(best && best.count > 0), placements: best ? best.placements : [], nested: true,
-      perItem: best ? best.perItem : entries.map(() => 0),
-    };
+  let chosen: { layout: PlanLayout; nestedNoGain: boolean } | null = null;
+  for (const frame of resolved.frames) {
+    const planned = await planFrame(entries, tiles, settings, frame, cancelled);
+    if (planned === 'cancelled') return null;
+    const score = (l: PlanLayout) => (l.fits ? l.count : -1);
+    if (!chosen || score(planned.layout) > score(chosen.layout)) chosen = planned;
   }
+  let layout = (chosen as { layout: PlanLayout }).layout;
+  const nestedNoGain = (chosen as { nestedNoGain: boolean }).nestedNoGain;
   if (cancelled()) return null;
   if (!layout.fits) {
     return { ok: false, error: multi ? { key: 'error.noFit', params: {} } : { key: 'error.noFitSingle', params: { w: cell.w, h: cell.h } } };
@@ -280,13 +318,13 @@ export async function planSheet(entries: SheetEntry[], settings: SheetSettings, 
     else if (placed.removed) summary.push({ key: 'sheet.calibrationMoved', params: { removed: placed.removed } });
   }
 
-  let matLayout: PlanLayout | null = null, paperKey = settings.paper as PaperKey;
-  if (resolved.upOn !== 'none') {
-    const tiled = tileMats(layout, PAPER[resolved.upOn], settings.marginMm);
-    if (tiled) {
-      summary.push({ key: 'sheet.upNote', params: { mats: tiled.mats, perMat: layout.count, paperKey: paperNameKey(resolved.upOn) } });
-      matLayout = layout; layout = tiled; paperKey = resolved.upOn;
-    } else warnings.push({ key: 'sheet.upNoFit', params: { paperKey: paperNameKey(resolved.upOn) } });
+  let matLayout: PlanLayout | null = null;
+  const paperKey = settings.paper;
+  if (resolved.tileOn) {
+    const tiled = tileMats(layout, resolved.tileOn, settings.marginMm);
+    if (!tiled) return { ok: false, error: { key: 'sheet.upNoFit', params: { paperKey: paperNameKey(paperKey) } } };
+    summary.push({ key: 'sheet.upNote', params: { mats: tiled.mats, perMat: layout.count, paperKey: paperNameKey(paperKey) } });
+    matLayout = layout; layout = tiled;
   }
 
   const orientationKey = `sheet.orientation.${layout.orientation}` as TranslationKey;

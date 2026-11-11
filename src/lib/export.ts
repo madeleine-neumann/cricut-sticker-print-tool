@@ -1,5 +1,5 @@
-import { PAPER, cutSvg, pdfFromRgba, pngSetDpi, sheetGeometryMulti, sheetSvg, type SheetGeometry } from './engine/index.js';
-import { matLimited, type Notice, type PlanLayout, type SheetEntry, type SheetPlan, type SheetSettings } from './sheets.ts';
+import { cutSvg, pdfFromRgba, pngSetDpi, sheetGeometryMulti, sheetSvg, type SheetGeometry } from './engine/index.js';
+import { type Notice, type PlanLayout, type SheetEntry, type SheetPlan, type SheetSettings } from './sheets.ts';
 import type { Motif, StickerResult } from './stickers.ts';
 
 export type SheetExportKind = 'print' | 'pdf' | 'png' | 'svg' | 'both';
@@ -27,11 +27,9 @@ export interface CutLayout { layout: PlanLayout; dpi: number; geo: SheetGeometry
  */
 export function cutLayout(plan: SheetPlan, settings: SheetSettings): CutLayout {
   const layout = plan.matLayout ?? plan.layout, dpi = sheetDpiFor(plan, settings), geo = geometryFor(plan, layout, dpi);
-  const paper = PAPER[settings.paper];
-  if (!matLimited(settings.paper) || plan.matLayout) return { layout, dpi, geo, matArea: null, overflow: false };
-  const portrait = layout.pageWMm <= layout.pageHMm;
-  const limW = portrait ? paper.limW : paper.limH, limH = portrait ? paper.limH : paper.limW;
-  const matArea = { w: Math.min(geo.pageW, (limW / 25.4) * dpi), h: Math.min(geo.pageH, (limH / 25.4) * dpi) };
+  // The layout carries the mat's cutting area, measured from the paper's top-left corner.
+  if (layout.limWMm >= layout.pageWMm - 0.05 && layout.limHMm >= layout.pageHMm - 0.05) return { layout, dpi, geo, matArea: null, overflow: false };
+  const matArea = { w: Math.min(geo.pageW, (layout.limWMm / 25.4) * dpi), h: Math.min(geo.pageH, (layout.limHMm / 25.4) * dpi) };
   let maxX = 0, maxY = 0;
   for (const d of geo.paths) for (const m of d.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)) { maxX = Math.max(maxX, +m[1]); maxY = Math.max(maxY, +m[2]); }
   for (const sq of layout.calibration ?? []) { maxX = Math.max(maxX, (sq.x + sq.size) / 25.4 * dpi); maxY = Math.max(maxY, (sq.y + sq.size) / 25.4 * dpi); }

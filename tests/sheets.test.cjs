@@ -10,7 +10,7 @@ const vm = require('node:vm');
   const context = { CompressionStream, Response, Uint8Array, Uint8ClampedArray, Float32Array, Float64Array, Int32Array, Uint32Array, DataView, Map, Set, Math, JSON, Number, String, Array, Promise };
   vm.runInNewContext(fs.readFileSync('tests/fixtures/legacy-engine.js', 'utf8') + '\nthis.engine = SB;', context);
   const legacy = context.engine;
-  const { planSheet, defaultSheetSettings, tileMats, matLimited, formatNotice } = sheets;
+  const { planSheet, defaultSheetSettings, tileMats, formatNotice, MATS, MACHINES } = sheets;
 
   // A 40 x 60 px opaque rectangle and a 40 x 40 px triangle, on transparent 60 x 80 px canvases.
   function motif(id, name, shape, heightMm = 30) {
@@ -30,17 +30,25 @@ const vm = require('node:vm');
   assert.equal(defaultSheetSettings.arrangement, 'nest');
   assert.equal(defaultSheetSettings.rotation, '90');
   assert.equal(defaultSheetSettings.dpiCap, 300);
-  assert.equal(defaultSheetSettings.fitMat, true);
+  assert.equal(defaultSheetSettings.machine, 'maker');
+  assert.equal(defaultSheetSettings.mat, 'm12x12');
   assert.equal(defaultSheetSettings.pageOutline, true);
 
-  // Grid matches the legacy engine for A4, Letter and a Cricut mat, with requested copies.
-  for (const paper of ['a4', 'letter', 'joyxtra']) {
-    const settings = { ...defaultSheetSettings, paper, arrangement: 'grid', calibration: false };
+  // Researched Cricut cutting areas (mm) per mat.
+  assert.deepEqual(MACHINES.maker, ['m12x12', 'm12x24']);
+  assert.deepEqual(MACHINES.joy, ['j45x65', 'j45x12']);
+  assert.ok(Math.abs(MATS.m12x12.cutW - 11.5 * 25.4) < 0.01 && Math.abs(MATS.m12x24.cutH - 23.5 * 25.4) < 0.01);
+  assert.ok(Math.abs(MATS.v24x28.cutW - 23.5 * 25.4) < 0.01 && Math.abs(MATS.v24x28.cutH - 27.5 * 25.4) < 0.01);
+  assert.ok(Math.abs(MATS.jx8x12.cutW - 8.25 * 25.4) < 0.01 && Math.abs(MATS.jx8x12.cutH - 11.75 * 25.4) < 0.01);
+
+  // Without a cutting machine the grid matches the legacy engine for A4 and Letter.
+  for (const paper of ['a4', 'letter']) {
+    const settings = { ...defaultSheetSettings, paper, machine: 'none', mat: null, arrangement: 'grid', calibration: false };
     const outcome = await planSheet([entry(rect)], settings);
     assert.ok(outcome.ok, `${paper} grid fits`);
     const r = entry(rect).result, b = r.res.bbox;
     const expected = legacy.layoutSheet({
-      paper, orientation: 'auto', marginMm: 6, gapMm: 1, copies: 0, fitMat: matLimited(paper),
+      paper, orientation: 'auto', marginMm: 6, gapMm: 1, copies: 0, fitMat: false,
       cellWMm: (b.x1 - b.x0) / r.dpi * 25.4, cellHMm: (b.y1 - b.y0) / r.dpi * 25.4,
     });
     assert.equal(outcome.plan.layout.count, expected.count, `${paper} grid count matches legacy`);
@@ -58,7 +66,7 @@ const vm = require('node:vm');
   assert.ok(wide.plan.layout.count < (await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'a4', arrangement: 'grid' })).plan.layout.count);
 
   // Nesting a triangle with rotation packs at least as many as the grid and matches the legacy nester.
-  const nested = await planSheet([entry(tri)], { ...defaultSheetSettings, paper: 'a4', arrangement: 'nest', rotation: '180', calibration: false });
+  const nested = await planSheet([entry(tri)], { ...defaultSheetSettings, paper: 'a4', machine: 'none', mat: null, arrangement: 'nest', rotation: '180', calibration: false });
   assert.ok(nested.ok);
   assert.ok(nested.plan.layout.count >= nested.plan.layout.gridCount || !nested.plan.layout.nested);
   if (nested.plan.layout.nested) {
@@ -71,7 +79,7 @@ const vm = require('node:vm');
       return { mask: legacy.fillHoles(m, cw, ch), w: cw, h: ch, spMm: (f / r.dpi) * 25.4 };
     })();
     let best = 0;
-    for (const [pw, ph] of [[210, 292], [292, 210]]) /* A4 limited to the Cricut mat by default */ for (const crit of ['top', 'bottom']) {
+    for (const [pw, ph] of [[210, 297], [297, 210]]) for (const crit of ['top', 'bottom']) {
       const res = legacy.nestRun({ pageWMm: pw, pageHMm: ph, marginMm: 6, gapMm: 1, angles: legacy.anglesFor('180'), cellMm: 0.5, crit,
         items: [{ foot: legacyFoot, tileWMm: (b.x1 - b.x0) / r.dpi * 25.4, tileHMm: (b.y1 - b.y0) / r.dpi * 25.4, want: 0 }] });
       best = Math.max(best, res.count);
@@ -98,19 +106,36 @@ const vm = require('node:vm');
   // Cancelled plans return null.
   assert.equal(await planSheet([entry(tri)], { ...defaultSheetSettings, paper: 'a4' }, { cancelled: () => true }), null);
 
-  // Several Joy 2 mats on Letter: tiled regions and the single mat layout kept for SVG.
-  const up = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'joy2', upOn: 'letter', arrangement: 'grid' });
+  // The cutting area limits where stickers go; print and cut file share it.
+  const inside = (L, margin) => L.placements.every((p) => p.cyMm <= L.limHMm - margin + 1e-6 && p.cxMm <= L.limWMm - margin + 1e-6);
+  const m12 = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'a4', arrangement: 'grid', orientation: 'portrait' });
+  assert.ok(Math.abs(m12.plan.layout.limHMm - 292.1) < 0.01 && m12.plan.layout.limWMm === 210, 'A4 on the 12 x 12 mat is cut to 292.1 mm');
+  assert.ok(inside(m12.plan.layout, 6));
+  const m24 = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'a4', mat: 'm12x24', arrangement: 'grid', orientation: 'portrait' });
+  assert.equal(m24.plan.layout.limHMm, 297, 'the 12 x 24 mat cuts the whole A4 page');
+  assert.ok(m24.plan.layout.count >= m12.plan.layout.count);
+  const m24land = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'a4', mat: 'm12x24', arrangement: 'grid', orientation: 'landscape' });
+  assert.equal(m24land.plan.layout.orientation, 'landscape');
+  assert.ok(Math.abs(m24land.plan.layout.limWMm - 292.1) < 0.01 && m24land.plan.layout.limHMm === 210, 'landscape A4 is limited by the mat width');
+  const xtra = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'a4', machine: 'joyxtra', mat: 'jx8x12', arrangement: 'grid' });
+  assert.equal(xtra.plan.layout.orientation, 'portrait', 'A4 only fits the Joy Xtra mat upright');
+  assert.ok(Math.abs(xtra.plan.layout.limWMm - 209.55) < 0.01);
+  const venture = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 's12x12', machine: 'venture', mat: 'v24x28', arrangement: 'grid' });
+  assert.equal(venture.plan.layout.limWMm, venture.plan.layout.pageWMm, 'Venture cuts the whole 12 x 12 page');
+
+  // Paper larger than a Joy mat: mat-sized areas are printed to cut apart; the mat layout is kept for SVG.
+  const up = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'letter', machine: 'joy', mat: 'j45x65', arrangement: 'grid' });
   assert.ok(up.ok);
   assert.ok(up.plan.layout.regions.length >= 2, 'several mats fit on Letter');
   assert.equal(up.plan.layout.count, up.plan.matLayout.count * up.plan.layout.regions.length);
   assert.equal(up.plan.layout.pageWMm * up.plan.layout.pageHMm, 215.9 * 279.4);
   assert.ok(up.plan.summary.some((n) => n.key === 'sheet.upNote'));
-  const longUp = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'joy2long', upOn: 'a4', arrangement: 'grid' });
-  assert.ok(longUp.ok, 'long mat is shortened to fit two on A4');
-  assert.equal(longUp.plan.layout.regions.length, 2);
+  assert.equal(up.plan.matLayout.pageWMm, 114.3);
+  assert.ok(Math.abs(up.plan.matLayout.limWMm - 107.95) < 0.01, 'stickers stay in the Joy cutting area');
+  const longUp = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'a4', machine: 'joy', mat: 'j45x12', arrangement: 'grid' });
+  assert.ok(longUp.ok, 'long Joy mat is shortened to fit on A4');
+  assert.ok(longUp.plan.matLayout.pageHMm <= 297 - 12 + 1e-6);
   assert.equal(tileMats({ ...up.plan.matLayout }, { name: 'X', slug: 'x', w: 10, h: 10, limW: 10, limH: 10 }, 6), null, 'no mat fits a tiny page');
-  assert.equal(matLimited('a4'), true);
-  assert.equal(matLimited('letter'), false);
 
   // Notices render with translated nested keys and formatted numbers.
   const translate = (key, params = {}) => key === 'sheet.paper.a4' ? 'A4' : `${key}:${JSON.stringify(params)}`;
@@ -119,13 +144,13 @@ const vm = require('node:vm');
 
   // Exports: SVG physical size and cut paths, PDF page size, PNG DPI metadata.
   const plan = (await planSheet([entry(rect, 4)], { ...defaultSheetSettings, paper: 'a4', arrangement: 'grid' })).plan;
-  const cut = exporter.sheetCutFile(plan, { ...defaultSheetSettings, paper: 'a4', fitMat: false }, null);
+  const cut = exporter.sheetCutFile(plan, { ...defaultSheetSettings, paper: 'a4' }, null);
   assert.match(cut.svg, /width="8\.2677in" height="11\.6929in"/, 'A4 SVG keeps physical size');
   assert.equal((cut.svg.match(/<path id="cut-/g) || []).length, 4, 'one cut path per sticker');
   assert.match(cut.svg, /id="page-outline"/);
   assert.doesNotMatch(exporter.sheetCutFile(plan, { ...defaultSheetSettings, paper: 'a4', pageOutline: false }, null).svg, /page-outline/);
   // The SVG must match the print file exactly: same page size and coordinates, never shortened.
-  const matFit = exporter.sheetCutFile(plan, { ...defaultSheetSettings, paper: 'a4', fitMat: true }, null);
+  const matFit = exporter.sheetCutFile(plan, { ...defaultSheetSettings, paper: 'a4' }, null);
   assert.match(matFit.svg, /width="8.2677in" height="11.6929in"/, "SVG keeps the full A4 page like the PDF");
   const fullGeo = exporter.geometryFor(plan, plan.layout, exporter.sheetDpiFor(plan, defaultSheetSettings));
   assert.match(matFit.svg, new RegExp(`viewBox="0 0 ${fullGeo.pageW} ${fullGeo.pageH}"`), 'SVG uses the print coordinates');
@@ -134,12 +159,12 @@ const vm = require('node:vm');
   assert.ok(outline, 'page outline is an open path on paper larger than the mat');
   assert.doesNotMatch(outline[1], /Z/i, 'frame has no bottom edge');
   const ys = [...outline[1].matchAll(/[MLVH]?\s*(-?[\d.]+)/g)];
-  const limit = 292 / 25.4 * exporter.sheetDpiFor(plan, defaultSheetSettings);
+  const limit = 292.1 / 25.4 * exporter.sheetDpiFor(plan, defaultSheetSettings);
   assert.ok(outline[1].startsWith('M0,') && outline[1].includes(`H${fullGeo.pageW}`), 'frame starts at the paper corner and spans the full width');
   assert.ok(Math.abs(Number(outline[1].match(/^M0,([\d.]+)/)[1]) - limit) < 1, 'frame sides end at the cutting area limit');
   assert.ok(ys.length > 0);
-  const loose = exporter.sheetCutFile(plan, { ...defaultSheetSettings, paper: 'a4', fitMat: false }, null);
-  assert.match(loose.svg, /<g id="page-outline"[^>]*>\s*<path/, 'A4 never gets a closed frame the mat cannot draw');
+  const m24Svg = exporter.sheetCutFile(m24.plan, { ...defaultSheetSettings, paper: 'a4', mat: 'm12x24' }, null).svg;
+  assert.match(m24Svg, /<g id="page-outline"[^>]*>\s*<rect/, 'on the 12 x 24 mat A4 gets a closed frame');
   const letterPlan = (await planSheet([entry(rect, 4)], { ...defaultSheetSettings, paper: 'letter', arrangement: 'grid' })).plan;
   assert.match(exporter.sheetCutFile(letterPlan, { ...defaultSheetSettings, paper: 'letter' }, null).svg, /<g id="page-outline"[^>]*>\s*<rect/, 'Letter fits the mat and keeps a closed frame');
   assert.equal(exporter.sheetFileName(plan, '.pdf'), 'rect_sheet-a4.pdf');
@@ -159,7 +184,7 @@ const vm = require('node:vm');
   for (const [label, settings] of [
     ['sparse grid', { ...defaultSheetSettings, paper: 'a4', arrangement: 'grid' }],
     ['full nest', { ...defaultSheetSettings, paper: 'letter', arrangement: 'nest' }],
-    ['full grid', { ...defaultSheetSettings, paper: 'joy2', arrangement: 'grid' }],
+    ['full grid', { ...defaultSheetSettings, paper: 'a4', machine: 'joy', mat: 'j45x65', arrangement: 'grid' }],
   ]) {
     const want = label === 'sparse grid' ? 3 : 0;
     const out = await planSheet([entry(rect, want)], settings);
@@ -173,11 +198,11 @@ const vm = require('node:vm');
     assert.equal(L.count, L.placements.length, `${label}: count follows removed placements`);
     if (label === 'sparse grid') assert.equal(L.count, 3, 'free space is used before removing stickers');
   }
-  const fullOff = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'joy2', arrangement: 'grid', calibration: false });
-  const fullOn = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'joy2', arrangement: 'grid' });
+  const fullOff = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'a4', machine: 'joy', mat: 'j45x65', arrangement: 'grid', calibration: false });
+  const fullOn = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'a4', machine: 'joy', mat: 'j45x65', arrangement: 'grid' });
   assert.equal(fullOff.plan.layout.calibration, undefined, 'check square can be switched off');
   if (fullOn.plan.layout.count < fullOff.plan.layout.count) assert.ok(fullOn.plan.summary.some((n) => n.key === 'sheet.calibrationMoved'));
-  const tiledSq = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'joy2', upOn: 'letter', arrangement: 'grid' });
+  const tiledSq = await planSheet([entry(rect)], { ...defaultSheetSettings, paper: 'letter', machine: 'joy', mat: 'j45x65', arrangement: 'grid' });
   assert.equal(tiledSq.plan.layout.calibration.length, tiledSq.plan.layout.regions.length, 'one check square per mat');
   assert.equal(tiledSq.plan.matLayout.calibration.length, 1);
   const sqPlan = (await planSheet([entry(rect, 3)], { ...defaultSheetSettings, paper: 'a4', arrangement: 'grid' })).plan;

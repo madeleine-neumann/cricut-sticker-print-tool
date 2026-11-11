@@ -13,6 +13,7 @@
 
 <section class="export-panel" aria-labelledby="export-title">
   <h3 id="export-title">{$translations('export.title')}</h3>
+  {#if model.sheetSettings.mat}<p class="export-machine">{$translations('export.forMachine', { machine: $translations(`sheet.machine.${model.sheetSettings.machine}`), mat: $translations(`sheet.mat.${model.sheetSettings.mat}`) })}</p>{/if}
   {#if !ready}<p class="field-help">{$translations('export.disabled')}</p>{/if}
 
   <div class="export-group" role="group" aria-labelledby="export-print-title" aria-describedby="export-print-help">

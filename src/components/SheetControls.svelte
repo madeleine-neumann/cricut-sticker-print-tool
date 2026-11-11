@@ -1,13 +1,12 @@
 <script lang="ts">
-  import { PAPER } from '../lib/engine/index.js';
   import { locale, translations, type TranslationKey } from '../lib/i18n.ts';
-  import { matLimited, paperKeys, type PaperKey, type RotationMode, type SheetSettings } from '../lib/sheets.ts';
+  import { MACHINES, machineKeys, matInfo, paperKeys, type MachineKey, type MatKey, type PaperKey, type RotationMode, type SheetSettings } from '../lib/sheets.ts';
   import type { WorkspaceState } from '../lib/state.svelte.ts';
 
   let { state: model }: { state: WorkspaceState } = $props();
   const settings = $derived(model.sheetSettings);
   const multi = $derived(model.collection.items.length > 1);
-  const paper = $derived(PAPER[settings.paper]);
+  const info = $derived(matInfo(settings));
   const rotations: RotationMode[] = ['none', '180', '90', '45', '15'];
   const mm = (value: string, fallback: number) => { const n = Number(value); return value === '' || !Number.isFinite(n) ? fallback : Math.max(0, n); };
   const fmt = $derived.by(() => { const language = $locale; return (value: number) => new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(value); });
@@ -16,25 +15,29 @@
 <section class="sheet-panel" aria-labelledby="sheet-controls-title">
   <h3 id="sheet-controls-title">{$translations('sheet.title')}</h3>
 
-  <label class="field-stack" for="paper"><span>{$translations('sheet.paper')}</span>
-    <select id="paper" value={settings.paper} onchange={(event) => model.setSheetSetting('paper', event.currentTarget.value as PaperKey)}>
-      {#each paperKeys as key}<option value={key}>{$translations(`sheet.paper.${key}` as TranslationKey)}</option>{/each}
+  <label class="field-stack" for="machine"><span>{$translations('sheet.machine')}</span>
+    <select id="machine" value={settings.machine} onchange={(event) => model.setMachine(event.currentTarget.value as MachineKey)}>
+      {#each machineKeys as key}<option value={key}>{$translations(`sheet.machine.${key}` as TranslationKey)}</option>{/each}
     </select>
   </label>
-
-  {#if paper.up}
-    <label class="field-stack" for="up-on"><span>{$translations('sheet.upOn')}</span>
-      <select id="up-on" value={settings.upOn} onchange={(event) => model.setSheetSetting('upOn', event.currentTarget.value as SheetSettings['upOn'])}>
-        <option value="none">{$translations('sheet.upOn.none')}</option>
-        <option value="letter">{$translations('sheet.upOn.letter')}</option>
-        <option value="a4">{$translations('sheet.upOn.a4')}</option>
+  {#if MACHINES[settings.machine].length}
+    <label class="field-stack" for="mat"><span>{$translations('sheet.mat')}</span>
+      <select id="mat" value={settings.mat} disabled={MACHINES[settings.machine].length < 2} onchange={(event) => model.setSheetSetting('mat', event.currentTarget.value as MatKey)}>
+        {#each MACHINES[settings.machine] as key}<option value={key}>{$translations(`sheet.mat.${key}` as TranslationKey)}</option>{/each}
       </select>
     </label>
   {/if}
 
-  {#if matLimited(settings.paper)}
-    <label class="check-row"><input type="checkbox" aria-describedby="fit-mat-help" checked={settings.fitMat} onchange={(event) => model.setSheetSetting('fitMat', event.currentTarget.checked)} />{$translations('sheet.fitMat')}</label>
-    <p class="field-help" id="fit-mat-help">{$translations('sheet.fitMatHelp', { w: fmt(paper.limW), h: fmt(paper.limH) })}</p>
+  <label class="field-stack" for="paper"><span>{$translations('sheet.paper')}</span>
+    <select id="paper" value={settings.paper} aria-describedby="mat-help" onchange={(event) => model.setSheetSetting('paper', event.currentTarget.value as PaperKey)}>
+      {#each paperKeys as key}<option value={key}>{$translations(`sheet.paper.${key}` as TranslationKey)}</option>{/each}
+    </select>
+  </label>
+  {#if info.mat}
+    <p class="field-help" id="mat-help">
+      {$translations('sheet.cutArea', { w: fmt(info.mat.cutW), h: fmt(info.mat.cutH) })}
+      {#if !info.fitsOnMat}{$translations('sheet.matTiled')}{:else if info.limitedByMat}{$translations('sheet.matLimited')}{/if}
+    </p>
   {/if}
 
   <label class="field-stack" for="arrangement"><span>{$translations('sheet.layout')}</span>
@@ -53,7 +56,7 @@
     </label>
   {/if}
 
-  {#if !paper.up || settings.upOn === 'none'}
+  {#if info.fitsOnMat}
     <label class="field-stack" for="orientation"><span>{$translations('sheet.orientation')}</span>
       <select id="orientation" value={settings.orientation} onchange={(event) => model.setSheetSetting('orientation', event.currentTarget.value as SheetSettings['orientation'])}>
         <option value="auto">{$translations('sheet.orientation.auto')}</option>

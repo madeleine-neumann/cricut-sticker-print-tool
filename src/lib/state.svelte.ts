@@ -1,7 +1,22 @@
 import { get } from 'svelte/store';
 import { exportSheet, exportSticker, type SheetExportKind, type StickerExportKind } from './export.ts';
 import { locale } from './i18n.ts';
-import { defaultSheetSettings, planSheet, type Notice, type PlanOutcome, type SheetSettings } from './sheets.ts';
+import { MACHINES, defaultSheetSettings, planSheet, type MachineKey, type MatKey, type Notice, type PlanOutcome, type SheetSettings } from './sheets.ts';
+
+const machineStorageKey = 'stickerwerkstatt.machine';
+
+/** The machine and mat rarely change, so they are remembered in this browser. */
+function rememberedMachine(): Pick<SheetSettings, 'machine' | 'mat'> {
+  try {
+    const saved = JSON.parse(globalThis.localStorage?.getItem(machineStorageKey) ?? 'null');
+    if (saved && saved.machine in MACHINES && (MACHINES[saved.machine as MachineKey] as (MatKey | null)[]).concat(saved.machine === 'none' ? [null] : []).includes(saved.mat)) return saved;
+  } catch { /* Storage can be disabled or hold old data. */ }
+  return { machine: defaultSheetSettings.machine, mat: defaultSheetSettings.mat };
+}
+
+function rememberMachine(settings: SheetSettings): void {
+  try { globalThis.localStorage?.setItem(machineStorageKey, JSON.stringify({ machine: settings.machine, mat: settings.mat })); } catch { /* Keep it for this page only. */ }
+}
 import { computeSticker, createCollection, loadMotifFiles, type Collection, type CutSettings, type LoadError, type Motif, type StickerResult } from './stickers.ts';
 
 export class WorkspaceState {
@@ -10,7 +25,7 @@ export class WorkspaceState {
   errors = $state<LoadError[]>([]);
   processing = $state(false);
   error = $state<'error.noVisiblePixels' | 'error.cutFailed' | null>(null);
-  sheetSettings = $state<SheetSettings>({ ...defaultSheetSettings, paper: get(locale) === 'de' ? 'a4' : 'letter' });
+  sheetSettings = $state<SheetSettings>({ ...defaultSheetSettings, ...rememberedMachine(), paper: get(locale) === 'de' ? 'a4' : 'letter' });
   sheet = $state.raw<PlanOutcome | null>(null);
   sheetBusy = $state(false);
   exportNotices = $state.raw<Notice[]>([]);
@@ -77,7 +92,13 @@ export class WorkspaceState {
 
   setSheetSetting<K extends keyof SheetSettings>(key: K, value: SheetSettings[K]): void {
     this.sheetSettings[key] = value;
+    if (key === 'machine' || key === 'mat') rememberMachine(this.sheetSettings);
     this.scheduleSheet();
+  }
+
+  setMachine(machine: MachineKey): void {
+    this.sheetSettings.mat = MACHINES[machine][0] ?? null;
+    this.setSheetSetting('machine', machine);
   }
 
   schedule(delay = 160): void {

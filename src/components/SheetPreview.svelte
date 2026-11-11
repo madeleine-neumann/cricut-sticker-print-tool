@@ -10,6 +10,9 @@
   const format = $derived.by(() => { const language = $locale; return (value: number) => new Intl.NumberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value); });
   const plan = $derived(model.sheet?.ok ? model.sheet.plan : null);
   const geo = $derived(plan ? geometryFor(plan, plan.layout, 900 / (Math.max(plan.layout.pageWMm, plan.layout.pageHMm) / 25.4)) : null);
+  // Only on screen: where the machine can cut when the paper is larger than the mat's cutting area.
+  const matArea = $derived(plan && geo && !plan.matLayout && (plan.layout.limWMm < plan.layout.pageWMm - 0.05 || plan.layout.limHMm < plan.layout.pageHMm - 0.05)
+    ? { w: geo.pageW * plan.layout.limWMm / plan.layout.pageWMm, h: geo.pageH * plan.layout.limHMm / plan.layout.pageHMm } : null);
   const summary = $derived(plan ? plan.summary.map((n) => formatNotice(n, $translations, format)).join(' ') : '');
   const warnings = $derived(plan ? plan.warnings.map((n) => formatNotice(n, $translations, format)) : []);
 
@@ -33,6 +36,7 @@
     {#if plan && geo}
       <div class="sheet-page" role="img" aria-label={$translations('sheet.previewImage', { summary })} style:aspect-ratio={`${geo.pageW} / ${geo.pageH}`} style:width={`min(100%, ${Math.round(640 * geo.pageW / geo.pageH)}px)`}>
         <canvas bind:this={canvas} aria-hidden="true"></canvas>
+        {#if matArea}<svg class="mat-overlay" viewBox={`0 0 ${geo.pageW} ${geo.pageH}`} preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width={matArea.w} height={matArea.h} /></svg>{/if}
         {#if showCut}<svg class="cut-overlay" viewBox={`0 0 ${geo.pageW} ${geo.pageH}`} preserveAspectRatio="none" aria-hidden="true"><path d={geo.paths.join('')} /></svg>{/if}
       </div>
     {/if}
