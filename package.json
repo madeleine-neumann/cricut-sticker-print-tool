@@ -1,0 +1,23 @@
+{
+  "name": "stickerwerkstatt",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json && tsc --project tsconfig.engine-types.json",
+    "test": "npm run check && node tests/engine-parity.test.cjs && node tests/border.test.cjs && node --import tsx tests/i18n.test.cjs && node --import tsx tests/stickers.test.cjs && node --import tsx tests/sheets.test.cjs && node tests/german-ui.test.cjs && node tests/build-smoke.test.cjs && node tests/ui-locale.test.cjs && node tests/ui-workspace.test.cjs"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "jsdom": "^26.0.0",
+    "svelte": "^5.57.3",
+    "svelte-check": "^4.7.8",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.8"
+  }
+}
