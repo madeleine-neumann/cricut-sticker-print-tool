@@ -20,7 +20,7 @@ function rememberedMachine(): Pick<SheetSettings, 'machine' | 'mat' | 'offsetXMm
 function rememberMachine(settings: SheetSettings): void {
   try { globalThis.localStorage?.setItem(machineStorageKey, JSON.stringify({ machine: settings.machine, mat: settings.mat, offsetXMm: settings.offsetXMm, offsetYMm: settings.offsetYMm })); } catch { /* Keep it for this page only. */ }
 }
-import { computeSticker, createCollection, loadMotifFiles, type Collection, type CutSettings, type LoadError, type Motif, type StickerResult } from './stickers.ts';
+import { computeSticker, createCollection, duplicateMotif, loadMotifFiles, mirrorMotif, type Collection, type CutSettings, type LoadError, type Motif, type StickerResult } from './stickers.ts';
 
 export class WorkspaceState {
   collection = $state<Collection>(createCollection());
@@ -59,6 +59,18 @@ export class WorkspaceState {
   remove(id: number): void {
     this.collection.remove(id);
     this.errors = [];
+    this.schedule(0);
+  }
+
+  duplicate(id: number): void {
+    if (duplicateMotif(this.collection, id)) this.schedule(0);
+  }
+
+  mirror(id: number): void {
+    const motif = this.collection.items.find((item) => item.id === id);
+    if (!motif) return;
+    mirrorMotif(motif);
+    if (id !== this.collection.selectedId) this.collection.select(id);
     this.schedule(0);
   }
 

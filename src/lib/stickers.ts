@@ -17,6 +17,8 @@ export interface Motif {
   copies: '' | number;
   noTransparency: boolean;
   thumbnail: string;
+  /** Flipped left to right; the pixels in `rgba` are already mirrored. */
+  mirrored: boolean;
   /** Cut settings of this motif; new motifs start with the defaults. */
   cut: CutSettings;
 }
@@ -145,14 +147,13 @@ export async function loadMotifFiles(files: Iterable<File>, collection: Collecti
       }
       const bbox = alphaBBox(decoded.rgba, decoded.width, decoded.height, 128);
       const base = file.name.replace(/\.[^.]+$/, '') || 'Sticker';
-      let name = base, suffix = 2;
-      while (collection.items.some((item) => item.name === name)) name = `${base} (${suffix++})`;
+      const name = uniqueName(collection, base);
       const motif: Motif = {
         id: collection.nextId++, name, rgba: decoded.rgba, width: decoded.width, height: decoded.height,
         heightMm: null,
         suggestedHeightMm: bbox && dpi && dpi > 0 ? Math.max(0.5, bbox.h / dpi * 25.4) : null,
         copies: '', noTransparency: !decoded.rgba.some((value, index) => index % 4 === 3 && value < 250),
-        thumbnail: decoded.thumbnail ?? '', cut: { ...defaultCutSettings },
+        thumbnail: decoded.thumbnail ?? '', mirrored: false, cut: { ...defaultCutSettings },
       };
       collection.items.push(motif);
       added.push(motif);
@@ -165,11 +166,43 @@ export async function loadMotifFiles(files: Iterable<File>, collection: Collecti
   return { added, errors };
 }
 
+function uniqueName(collection: Collection, base: string): string {
+  let name = base, suffix = 2;
+  while (collection.items.some((item) => item.name === name)) name = `${base} (${suffix++})`;
+  return name;
+}
+
+/** An independent copy right after the original, selected, with the same size, copies and cut settings. */
+export function duplicateMotif(collection: Collection, id: number): Motif | null {
+  const index = collection.items.findIndex((item) => item.id === id);
+  if (index < 0) return null;
+  const source = collection.items[index];
+  const copy: Motif = { ...source, id: collection.nextId++, name: uniqueName(collection, source.name), cut: { ...source.cut } };
+  collection.items.splice(index + 1, 0, copy);
+  collection.selectedId = copy.id;
+  // Pixels are shared until one of them is mirrored, which replaces its array.
+  return collection.items[index + 1];
+}
+
+/** Flip a motif left to right. */
+export function mirrorMotif(motif: Motif): void {
+  const { width, height, rgba } = motif, out = new Uint8ClampedArray(rgba.length);
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    for (let x = 0; x < width; x++) {
+      const from = (row + x) * 4, to = (row + width - 1 - x) * 4;
+      out[to] = rgba[from]; out[to + 1] = rgba[from + 1]; out[to + 2] = rgba[from + 2]; out[to + 3] = rgba[from + 3];
+    }
+  }
+  motif.rgba = out;
+  motif.mirrored = !motif.mirrored;
+}
+
 const resultCache = new WeakMap<Motif, { signature: string; value: StickerResult }>();
 
 export function computeSticker(motif: Motif, settings: CutSettings): StickerResult {
   if (motif.heightMm === null) throw new Error('Motif height missing');
-  const signature = JSON.stringify([motif.heightMm, settings]);
+  const signature = JSON.stringify([motif.heightMm, motif.mirrored, settings]);
   const cached = resultCache.get(motif);
   if (cached?.signature === signature) return cached.value;
   const bbox = alphaBBox(motif.rgba, motif.width, motif.height, settings.alphaThreshold);

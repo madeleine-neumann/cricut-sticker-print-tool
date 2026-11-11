@@ -197,3 +197,10 @@ input:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px 
 .alignment-values { display: flex; flex-direction: column; }
 .offset-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 0 18px; }
 .alignment .export-buttons { grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); }
+img.mirrored { transform: scaleX(-1); }
+.motif-actions { display: flex; flex-wrap: wrap; gap: 6px; grid-column: 1 / -1; padding: 0 4px; }
+.motif-actions button { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 5px 10px; border: 1px solid #b7c1d1; border-radius: 8px; background: #fff; color: #243248; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.motif-actions button:hover { border-color: #2455c7; color: #1d43a0; }
+.motif-actions button[aria-pressed="true"] { border-color: #2455c7; background: #e6edff; color: #1d43a0; }
+.motif-actions button:focus-visible { outline: 3px solid #265bbf; outline-offset: 2px; }
+.motif-actions svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }

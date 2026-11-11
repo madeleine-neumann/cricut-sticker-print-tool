@@ -26,10 +26,18 @@
       {#each model.collection.items as motif (motif.id)}
         <li class:selected={model.collection.selectedId === motif.id}>
           <button type="button" class="motif-pick" aria-pressed={model.collection.selectedId === motif.id} aria-label={$translations('upload.select', { name: motif.name })} onclick={() => model.select(motif.id)}>
-            {#if motif.thumbnail}<img src={motif.thumbnail} alt="" width="48" height="48" />{/if}
+            {#if motif.thumbnail}<img src={motif.thumbnail} alt="" width="48" height="48" class:mirrored={motif.mirrored} />{/if}
             <span><strong>{motif.name}</strong>{#if motif.heightMm === null}<small class="needs-height">{$translations('upload.heightMissing')}</small>{/if}</span>
           </button>
           <button type="button" class="remove-button" aria-label={$translations('upload.remove', { name: motif.name })} title={$translations('upload.remove', { name: motif.name })} onclick={() => model.remove(motif.id)}>×</button>
+          <div class="motif-actions">
+            <button type="button" aria-label={$translations('upload.duplicateFor', { name: motif.name })} onclick={() => model.duplicate(motif.id)}>
+              <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="6.5" y="6.5" width="10" height="10" rx="2"/><path d="M13.5 3.5h-8a2 2 0 0 0-2 2v8"/></svg>{$translations('upload.duplicate')}
+            </button>
+            <button type="button" aria-pressed={motif.mirrored} aria-label={$translations('upload.mirrorFor', { name: motif.name })} onclick={() => model.mirror(motif.id)}>
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5v15"/><path d="M7 5.5 2.5 14.5H7z"/><path d="M13 5.5l4.5 9H13z"/></svg>{$translations('upload.mirror')}
+            </button>
+          </div>
           <label class="copies-field">
             <span>{$translations('upload.height')}</span>
             <span class="number-with-unit"><input type="number" min="0.5" max="1000" step="0.1" inputmode="decimal" required value={motif.heightMm ?? ''} placeholder={motif.suggestedHeightMm ? motif.suggestedHeightMm.toFixed(1) : ''} aria-label={$translations('upload.heightFor', { name: motif.name })} aria-describedby={motif.suggestedHeightMm ? `height-hint-${motif.id}` : undefined} onchange={(event) => model.setHeight(motif.id, event.currentTarget.value === '' ? '' : Number(event.currentTarget.value))} /><span>mm</span></span>

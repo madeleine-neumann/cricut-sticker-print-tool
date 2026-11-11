@@ -48,6 +48,16 @@ const { JSDOM } = require('jsdom');
   assert.equal(heightInputs.length, 2, 'height field sits inside each motif list item');
   for (const heightInput of heightInputs.reverse()) { heightInput.value = '50'; heightInput.dispatchEvent(new dom.window.Event('change', { bubbles: true })); }
   for (let i = 0; i < 5; i++) await flush();
+  document.querySelector('.motif-list li button[aria-label^="Duplicate"]').click(); await flush();
+  const listNames = () => [...document.querySelectorAll('.motif-list li strong')].map((el) => el.textContent);
+  assert.deepEqual(listNames(), ['shape', 'shape (2)', 'second'], 'duplicate appears right after the original');
+  const mirrorButton = [...document.querySelectorAll('.motif-list li')][1].querySelector('button[aria-label^="Mirror"]');
+  mirrorButton.click(); await flush();
+  assert.equal(mirrorButton.getAttribute('aria-pressed'), 'true', 'mirror state is announced');
+  [...document.querySelectorAll('.motif-list .remove-button')][1].click(); await flush();
+  assert.deepEqual(listNames(), ['shape', 'second']);
+  document.querySelector('.motif-list li button[aria-label^="Select shape"]').click();
+  for (let i = 0; i < 5; i++) await flush();
   assert.match(document.querySelector('.preview-panel').textContent, /shape/);
   assert.ok(document.querySelector('.cut-overlay path').getAttribute('d'), 'preview includes the cut path');
   const cutStep = [...document.querySelectorAll('.steps button')][1];

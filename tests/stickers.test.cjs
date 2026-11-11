@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 (async () => {
-  const { createCollection, defaultCutSettings, loadMotifFiles, computeSticker } = await import('../src/lib/stickers.ts');
+  const { createCollection, defaultCutSettings, loadMotifFiles, computeSticker, duplicateMotif, mirrorMotif } = await import('../src/lib/stickers.ts');
   const engine = await import('../src/lib/engine/index.js');
   const context = { CompressionStream, Response };
   vm.runInNewContext(fs.readFileSync('tests/fixtures/legacy-engine.js', 'utf8') + '\nthis.engine = SB;', context);
@@ -76,5 +76,37 @@ const vm = require('node:vm');
   assert.deepEqual(plain(adapted.loops), plain(legacy.cutPath(old.cut, old.width, old.height, {})));
   assert.equal(computeSticker(motif, settings), adapted, 'unchanged computation should be cached');
   assert.notEqual(computeSticker(motif, { ...settings, bleedMm: 3 }), adapted, 'settings should invalidate the cache');
+
+  // Duplicate: an independent copy right after the original, selected, with its own cut settings.
+  const dupCollection = createCollection();
+  const asym = new Uint8ClampedArray(15 * 15 * 4);
+  for (let y = 3; y < 12; y++) for (let x = 2; x < 6 + y / 2; x++) asym.set([200, 40, 90, 255], (y * 15 + x) * 4);
+  await loadMotifFiles([file('left.png'), file('other.png')], dupCollection, async () => ({ rgba: asym, width: 15, height: 15 }));
+  const original = dupCollection.items[0];
+  original.heightMm = 30; original.copies = 4; original.cut.bleedMm = 3;
+  const copy = duplicateMotif(dupCollection, original.id);
+  assert.equal(dupCollection.items[1], copy, 'copy sits right after the original');
+  assert.equal(dupCollection.selectedId, copy.id, 'copy is selected');
+  assert.notEqual(copy.id, original.id);
+  assert.equal(copy.name, 'left (2)');
+  assert.equal(copy.heightMm, 30); assert.equal(copy.copies, 4); assert.equal(copy.cut.bleedMm, 3);
+  copy.cut.bleedMm = 1;
+  assert.equal(original.cut.bleedMm, 3, 'cut settings are independent');
+  assert.equal(duplicateMotif(dupCollection, 9999), null);
+
+  // Mirror: flips the pixels left to right, the cut line follows, mirroring twice restores the original.
+  const before = Array.from(copy.rgba);
+  const resultBefore = computeSticker(copy, copy.cut);
+  mirrorMotif(copy);
+  assert.equal(copy.mirrored, true);
+  assert.deepEqual(Array.from(copy.rgba.slice((5 * 15 + 14) * 4, (5 * 15 + 14) * 4 + 4)), before.slice((5 * 15) * 4, (5 * 15) * 4 + 4), 'pixel row is reversed');
+  assert.deepEqual(Array.from(original.rgba), before, 'mirroring a copy leaves the original alone');
+  const resultAfter = computeSticker(copy, copy.cut);
+  assert.notEqual(resultAfter, resultBefore, 'mirroring invalidates the cached cut line');
+  const xs = (r) => r.loops.flat().map((p) => p[0]);
+  assert.ok(Math.abs((Math.min(...xs(resultAfter)) + Math.max(...xs(resultBefore))) - resultAfter.res.width) < 1.5, 'cut line is mirrored too');
+  mirrorMotif(copy);
+  assert.equal(copy.mirrored, false);
+  assert.deepEqual(Array.from(copy.rgba), before, 'mirroring twice restores the artwork');
   console.log('Sticker load, limits, selection, DPI, alpha warning, cache and legacy parity OK');
 })().catch((error) => { console.error(error); process.exitCode = 1; });
