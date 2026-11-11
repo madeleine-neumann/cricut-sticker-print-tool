@@ -155,25 +155,33 @@ export const withPngDpi = (buffer: ArrayBufferLike | Uint8Array, dpi: number) =>
 
 const tileCanvases = new WeakMap<StickerResult, HTMLCanvasElement>();
 
-/** What prints of one sticker (artwork + bleed). Only printed pixels are painted, so nested neighbours stay visible. */
-function tileCanvas(result: StickerResult): HTMLCanvasElement {
-  const cached = tileCanvases.get(result);
-  if (cached) return cached;
+/**
+ * What prints of one sticker (artwork, bleed, border), cropped to its print area. Only pixels inside the print mask
+ * are kept so nested neighbours stay visible; their own transparency stays too, so a blank paper border is not filled.
+ */
+export function tilePixels(result: StickerResult): Uint8ClampedArray<ArrayBuffer> {
   const { res } = result, b = res.bbox, tw = b.x1 - b.x0, th = b.y1 - b.y0;
-  const image = new ImageData(tw, th), out = image.data;
+  const out = new Uint8ClampedArray(tw * th * 4);
   for (let y = 0; y < th; y++) {
     const row = (b.y0 + y) * res.width + b.x0;
     for (let x = 0; x < tw; x++) {
       const si = row + x;
       if (res.printMask[si]) {
         const di = (y * tw + x) * 4, s4 = si * 4;
-        out[di] = res.rgba[s4]; out[di + 1] = res.rgba[s4 + 1]; out[di + 2] = res.rgba[s4 + 2]; out[di + 3] = 255;
+        out[di] = res.rgba[s4]; out[di + 1] = res.rgba[s4 + 1]; out[di + 2] = res.rgba[s4 + 2]; out[di + 3] = res.rgba[s4 + 3];
       }
     }
   }
+  return out;
+}
+
+function tileCanvas(result: StickerResult): HTMLCanvasElement {
+  const cached = tileCanvases.get(result);
+  if (cached) return cached;
+  const b = result.res.bbox, tw = b.x1 - b.x0, th = b.y1 - b.y0;
   const canvas = document.createElement('canvas');
   canvas.width = tw; canvas.height = th;
-  canvas.getContext('2d')?.putImageData(image, 0, 0);
+  canvas.getContext('2d')?.putImageData(new ImageData(tilePixels(result), tw, th), 0, 0);
   tileCanvases.set(result, canvas);
   return canvas;
 }

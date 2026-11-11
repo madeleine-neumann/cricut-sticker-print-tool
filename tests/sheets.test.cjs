@@ -242,5 +242,16 @@ const vm = require('node:vm');
   assert.ok(Math.abs(tx - (15 - 8) * tmm) < 0.05 && Math.abs(ty - 15 * tmm) < 0.05, 'first cross is centred on the first mark');
   const [cx2, cy2] = crossAt(exporter.alignmentTestSvg({ ...defaultSheetSettings, paper: 'a4', offsetXMm: 1, offsetYMm: 2 }).svg);
   assert.ok(Math.abs(tx - cx2 - tmm) < 0.05 && Math.abs(ty - cy2 - 2 * tmm) < 0.05, 'test crosses use the current correction');
+
+  // Outer border on the sheet: blank paper stays transparent (white on the page), a coloured border keeps its colour.
+  const bordered = (mode) => computeSticker(rect, { ...layoutCut, borderMode: mode, borderMm: 2, borderColor: '#3366cc' });
+  const borderPixel = (result) => {
+    const { res } = result, b = res.bbox, tw = b.x1 - b.x0, pixels = exporter.tilePixels(result);
+    const y = Math.round((b.y1 - b.y0) / 2), x = 1; // left edge of the tile, inside the border
+    assert.equal(res.printMask[(b.y0 + y) * res.width + b.x0 + x], 1);
+    return Array.from(pixels.slice((y * tw + x) * 4, (y * tw + x) * 4 + 4));
+  };
+  assert.equal(borderPixel(bordered('paper'))[3], 0, 'blank paper border is transparent, not black');
+  assert.deepEqual(borderPixel(bordered('color')), [51, 102, 204, 255], 'coloured border keeps the chosen colour');
   console.log('Sheet formats, grid, nesting, rotation, multi-motif, no-fit, mat tiling and export files OK');
 })().catch((error) => { console.error(error); process.exitCode = 1; });
